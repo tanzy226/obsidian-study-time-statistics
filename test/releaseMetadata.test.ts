@@ -28,3 +28,7 @@ test("required release files and license are present", () => {
 		assert.ok(read(path).length > 0, `${path} must not be empty`);
 	}
 });
+
+test("production bundle does not create dynamic script elements", () => {
+	assert.doesNotMatch(read("main.js"), /createElement\((["'])script\1\)/);
+});
