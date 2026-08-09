@@ -20,7 +20,7 @@ test("public copy uses the new product name and includes privacy disclosure", ()
 	const publicText = [read("README.md"), read("README_zh.md"), read("manifest.json")].join("\n");
 	assert.doesNotMatch(publicText, /Focus Time Plus|Study Ledger/i);
 	assert.match(publicText, /local|本地/i);
-	assert.match(publicText, /synthetic|虚构/i);
+	assert.match(publicText, /anonymized|redacted|匿名|隐藏|删除/i);
 });
 
 test("required release files and license are present", () => {
