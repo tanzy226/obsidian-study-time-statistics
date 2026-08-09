@@ -18,8 +18,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npm test
       - run: npm run build
+      - run: npm test
       - name: Verify tag matches manifest
         run: node -e "const m=require('./manifest.json'); if (process.env.GITHUB_REF_NAME !== m.version) process.exit(1)"
       - uses: softprops/action-gh-release@v2
