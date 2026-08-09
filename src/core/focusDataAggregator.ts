@@ -66,20 +66,20 @@ export class FocusDataAggregator {
 		const notes: Array<{ filePath: string; fileId: string; duration: number }> = [];
 		let totalDuration = 0;
 
-		const totalReadData = this.dataManager.getCategory("readData");
+		const totalReadData = this.dataManager.getReadData();
 
-		for (const fileId in readData) {
-			const record = readData[fileId];
+			for (const fileId in readData) {
+				const record = readData[fileId];
+				if (!record) continue;
 
 			let filePath = "";
-			if (totalReadData) {
 				for (const path in totalReadData) {
-					if (totalReadData[path].fileId === fileId) {
-						filePath = path;
-						break;
+					const totalRecord = totalReadData[path];
+					if (totalRecord?.fileId === fileId) {
+							filePath = path;
+							break;
 					}
 				}
-			}
 
 			// Skip deleted files
 			if (!filePath) {

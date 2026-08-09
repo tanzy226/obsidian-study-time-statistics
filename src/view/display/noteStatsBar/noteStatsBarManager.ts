@@ -15,14 +15,14 @@ export class NoteStatsBarManager {
 		this.app = app;
 		this.dataManager = dataManager;
 		this.plugin = plugin;
-		plugin.registerEvent(app.workspace.on("layout-change", () => this.render()));
-		plugin.registerEvent(app.workspace.on("file-open", () => this.render()));
-		plugin.registerEvent(app.workspace.on("active-leaf-change", () => this.render()));
+		plugin.registerEvent(app.workspace.on("layout-change", () => { this.render(); }));
+		plugin.registerEvent(app.workspace.on("file-open", () => { this.render(); }));
+		plugin.registerEvent(app.workspace.on("active-leaf-change", () => { this.render(); }));
 		plugin.registerInterval(window.setInterval(() => this.render(), 1000));
-		plugin.registerInterval(window.setInterval(() => this.refreshExtendedStats(), 15000));
+		plugin.registerInterval(window.setInterval(() => { void this.refreshExtendedStats(); }, 15000));
 		app.workspace.onLayoutReady(() => {
 			this.render();
-			this.refreshExtendedStats();
+			void this.refreshExtendedStats();
 		});
 	}
 
@@ -32,14 +32,13 @@ export class NoteStatsBarManager {
 			if (!(view instanceof MarkdownView) || !view.file) continue;
 			const host = view.contentEl;
 			const target = this.getScrollableNoteTarget(view, host);
-			let bar = host.querySelector(".study-time-statistics-note-bar") as HTMLElement | null;
+			let bar = host.querySelector<HTMLElement>(".study-time-statistics-note-bar");
 			if (!bar) {
-				bar = document.createElement("div");
-				bar.className = "study-time-statistics-note-bar";
+				bar = target.createDiv({cls: "study-time-statistics-note-bar"});
 			}
 			if (bar.parentElement !== target) target.prepend(bar);
 
-			const record = this.dataManager.get("readData", view.file.path);
+			const record = this.dataManager.getReadRecord(view.file.path);
 			const openCount = Math.max(0, Number(record?.openCount) || 0);
 			const duration = Math.max(0, Number(record?.duration) || 0);
 			const average = openCount > 0 ? duration / openCount : 0;
@@ -59,7 +58,7 @@ export class NoteStatsBarManager {
 		const selector = view.getMode() === "preview"
 			? ".markdown-preview-sizer"
 			: ".cm-sizer";
-		return (host.querySelector(selector) as HTMLElement | null) || host;
+		return host.querySelector<HTMLElement>(selector) ?? host;
 	}
 
 	private async refreshExtendedStats() {
@@ -84,16 +83,11 @@ export class NoteStatsBarManager {
 	}
 
 	private addMetric(bar: HTMLElement, label: string, value: string) {
-		const item = document.createElement("span");
-		item.className = "study-time-statistics-note-bar-item";
-		const labelEl = document.createElement("span");
-		labelEl.className = "study-time-statistics-note-bar-label";
+		const item = bar.createSpan({cls: "study-time-statistics-note-bar-item"});
+		const labelEl = item.createSpan({cls: "study-time-statistics-note-bar-label"});
 		labelEl.textContent = `${label}：`;
-		const valueEl = document.createElement("span");
-		valueEl.className = "study-time-statistics-note-bar-value";
+		const valueEl = item.createSpan({cls: "study-time-statistics-note-bar-value"});
 		valueEl.textContent = value;
-		item.append(labelEl, valueEl);
-		bar.append(item);
 	}
 
 	public unload() {

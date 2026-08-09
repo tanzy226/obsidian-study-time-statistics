@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.2 — 2026-08-10
+
+- Adopted Obsidian's official ESLint and Stylelint configurations and resolved every reported source and CSS finding.
+- Added runtime validation for persisted study records, daily history, sessions, and settings.
+- Migrated the settings tab to Obsidian 1.13's searchable declarative settings API.
+- Replaced unsafe fire-and-forget promises and raw DOM element creation with typed, supported patterns.
+- Replaced the deprecated `builtin-modules` build dependency with Node's built-in module list.
+- Raised the minimum Obsidian version to 1.13.0 to match the APIs used by the plugin.
+
 ## 1.0.1 — 2026-08-10
 
 - Removed all dynamic `<script>` element creation from the production bundle by using the stable React 18 runtime.

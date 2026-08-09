@@ -77,10 +77,11 @@ export function DateNavigator(props: DateNavigatorProps) {
 			return `${startOfWeek.getFullYear()}-${String(startOfWeek.getMonth() + 1).padStart(2, '0')}-${String(startOfWeek.getDate()).padStart(2, '0')} ~ ${endOfWeek.getFullYear()}-${String(endOfWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfWeek.getDate()).padStart(2, '0')}`;
 		} else if (viewType === 'month') {
 			return `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-		} else if (viewType === 'year') {
-			return `${currentDate.getFullYear()}`;
-		}
-	};
+			} else if (viewType === 'year') {
+				return `${currentDate.getFullYear()}`;
+			}
+			return '';
+		};
 
 	const isToday = () => {
 		const today = new Date();
@@ -175,4 +176,3 @@ export function DateNavigator(props: DateNavigatorProps) {
 		</div>
 	);
 }
-

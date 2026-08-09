@@ -51,7 +51,7 @@ export interface StudyAnalyticsResult {
 function normalizeDateKey(date: string): string {
 	const parts = date.split("-").map(Number);
 	if (parts.length !== 3 || parts.some(Number.isNaN)) return date;
-	return `${parts[0]}-${String(parts[1]).padStart(2, "0")}-${String(parts[2]).padStart(2, "0")}`;
+	return `${parts[0] ?? 0}-${String(parts[1] ?? 0).padStart(2, "0")}-${String(parts[2] ?? 0).padStart(2, "0")}`;
 }
 
 function localDateKey(timestamp: number): string {
@@ -61,7 +61,7 @@ function localDateKey(timestamp: number): string {
 
 function dateFromKey(key: string): Date {
 	const [year, month, day] = key.split("-").map(Number);
-	return new Date(year, month - 1, day);
+	return new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1);
 }
 
 export function calculateStreaks(activeDateKeys: string[], now: Date): {current: number; longest: number} {
@@ -71,8 +71,11 @@ export function calculateStreaks(activeDateKeys: string[], now: Date): {current:
 	let longest = 1;
 	let run = 1;
 	for (let index = 1; index < unique.length; index++) {
-		const previous = dateFromKey(unique[index - 1]);
-		const current = dateFromKey(unique[index]);
+		const previousKey = unique[index - 1];
+		const currentKey = unique[index];
+		if (!previousKey || !currentKey) continue;
+		const previous = dateFromKey(previousKey);
+		const current = dateFromKey(currentKey);
 		const dayDiff = Math.round((current.getTime() - previous.getTime()) / 86400000);
 		run = dayDiff === 1 ? run + 1 : 1;
 		longest = Math.max(longest, run);
@@ -86,8 +89,11 @@ export function calculateStreaks(activeDateKeys: string[], now: Date): {current:
 
 	let currentRun = 1;
 	for (let index = unique.length - 1; index > 0; index--) {
-		const newer = dateFromKey(unique[index]);
-		const older = dateFromKey(unique[index - 1]);
+		const newerKey = unique[index];
+		const olderKey = unique[index - 1];
+		if (!newerKey || !olderKey) continue;
+		const newer = dateFromKey(newerKey);
+		const older = dateFromKey(olderKey);
 		if (Math.round((newer.getTime() - older.getTime()) / 86400000) !== 1) break;
 		currentRun++;
 	}
@@ -149,10 +155,16 @@ export function buildStudyAnalytics(
 		const date = new Date(session.openedAt);
 		const hour = date.getHours();
 		const weekday = date.getDay();
-		hourly[hour].count++;
-		hourly[hour].duration += Math.max(0, session.duration || 0);
-		weekdays[weekday].count++;
-		weekdays[weekday].duration += Math.max(0, session.duration || 0);
+		const hourlyPoint = hourly[hour];
+		const weekdayPoint = weekdays[weekday];
+		if (hourlyPoint) {
+			hourlyPoint.count++;
+			hourlyPoint.duration += Math.max(0, session.duration || 0);
+		}
+		if (weekdayPoint) {
+			weekdayPoint.count++;
+			weekdayPoint.duration += Math.max(0, session.duration || 0);
+		}
 	}
 
 	const sessionBuckets = [
@@ -166,12 +178,13 @@ export function buildStudyAnalytics(
 	for (const session of sessions) {
 		const minutes = Math.max(0, session.duration || 0) / 60000;
 		const index = minutes < 1 ? 0 : minutes < 5 ? 1 : minutes < 15 ? 2 : minutes < 30 ? 3 : minutes < 60 ? 4 : 5;
-		sessionBuckets[index].count++;
+		const bucket = sessionBuckets[index];
+		if (bucket) bucket.count++;
 	}
 
 	const folderMap = new Map<string, {folder: string; noteCount: number; openCount: number; totalTime: number}>();
 	for (const row of rows) {
-		const folder = row.filePath.includes("/") ? row.filePath.split("/")[0] : "__vault_root__";
+		const folder = row.filePath.includes("/") ? row.filePath.split("/")[0] ?? "__vault_root__" : "__vault_root__";
 		const aggregate = folderMap.get(folder) || {folder, noteCount: 0, openCount: 0, totalTime: 0};
 		aggregate.noteCount++;
 		aggregate.openCount += row.openCount;

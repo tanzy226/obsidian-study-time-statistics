@@ -14,8 +14,8 @@ export class StudyAnalyticsService {
 
 	public async analyze(): Promise<StudyAnalyticsResult> {
 		await this.dataManager.loadData();
-		const records = Object.values(this.dataManager.getCategory("readData") || {})
-			.filter((record: any) => record?.filePath && this.app.vault.getFileByPath(record.filePath)) as ReadRecord[];
+		const records: ReadRecord[] = Object.values(this.dataManager.getReadData())
+			.filter(record => this.app.vault.getFileByPath(record.filePath) !== null);
 		const recordById = new Map(records.map(record => [record.fileId, record]));
 		const dates = await this.dailyReadDataManager.listDates();
 		const loadedDays = await Promise.all(dates.map(async date => ({date, data: await this.dailyReadDataManager.loadDailyData(date)})));
@@ -23,10 +23,10 @@ export class StudyAnalyticsService {
 		const dailyPoints: DailyStudyPoint[] = [];
 
 		for (const {date, data} of loadedDays) {
-			const dailyRecords = Object.values(data.dailyReadData || {}) as ReadRecord[];
-			const validDailyRecords = dailyRecords.filter(record => record && recordById.has(record.fileId));
-			const daySessions = (Array.isArray(data.sessions) ? data.sessions : [])
-				.filter((session: StudySession) => session?.filePath && this.app.vault.getFileByPath(session.filePath));
+			const dailyRecords = Object.values(data.dailyReadData);
+			const validDailyRecords = dailyRecords.filter(record => recordById.has(record.fileId));
+			const daySessions: StudySession[] = data.sessions
+				.filter(session => this.app.vault.getFileByPath(session.filePath) !== null);
 			sessions.push(...daySessions);
 			dailyPoints.push({
 				date,

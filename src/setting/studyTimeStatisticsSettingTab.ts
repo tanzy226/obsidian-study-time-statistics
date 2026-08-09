@@ -1,35 +1,33 @@
-import {App, PluginSettingTab, Setting} from "obsidian";
+import {App, PluginSettingTab, SettingDefinitionItem} from "obsidian";
 import StudyTimeStatisticsPlugin from "../main";
 import I18n from "../language/i18n";
 
+const STRICT_MODE_KEY = "strictMode";
+
 export class StudyTimeStatisticsSettingTab extends PluginSettingTab {
-	plugin: StudyTimeStatisticsPlugin;
-
-	constructor(app: App, plugin: StudyTimeStatisticsPlugin) {
+	constructor(app: App, private readonly plugin: StudyTimeStatisticsPlugin) {
 		super(app, plugin);
-		this.plugin = plugin;
 	}
 
-	async display(): Promise<void> {
-		const {containerEl} = this;
-		containerEl.empty();
-		await this.plugin.dataManager.loadData();
-		this.addStrictModeSetting(containerEl);
-
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		return [{
+			name: I18n.t("strictMode"),
+			desc: I18n.t("strictModeDesc"),
+			control: {
+				type: "toggle",
+				key: STRICT_MODE_KEY,
+				defaultValue: true
+			}
+		}];
 	}
 
-	private addStrictModeSetting(containerEl: HTMLElement) {
-		const strictModeSetting = this.plugin.dataManager.get('settings', 'strictMode');
-		new Setting(containerEl)
-			.setName(I18n.t('strictMode'))
-			.setDesc(I18n.t('strictModeDesc'))
-			.addToggle((toggle) =>
-				toggle
-					.setValue(strictModeSetting !== undefined ? strictModeSetting : true)
-					.onChange((value) => {
-						this.plugin.dataManager.put('settings', 'strictMode', value).finally();
-					})
-			)
+	getControlValue(key: string): unknown {
+		return key === STRICT_MODE_KEY ? this.plugin.dataManager.getStrictMode() : undefined;
 	}
 
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		if (key === STRICT_MODE_KEY && typeof value === "boolean") {
+			await this.plugin.dataManager.setStrictMode(value);
+		}
+	}
 }

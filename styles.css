@@ -21,10 +21,7 @@
 	gap: 12px;
 	padding: 10px;
 	max-height: 630px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
+    overflow: hidden auto;
 }
 
 .leaderboard-container::-webkit-scrollbar {
@@ -38,7 +35,7 @@
     align-items: center;
 	padding: 10px;
 	border-radius: 8px;
-	box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 5px rgb(0 0 0 / 10%);
 	font-size: 16px;
 	transition: background-color 0.2s ease;
 	cursor: pointer;
@@ -76,7 +73,7 @@
     flex: 0 0 auto;
 }
 
-/*------------------- Day Mode Styling Begin ------------------ */
+/* ------------------- Day Mode Styling Begin ------------------ */
 
 .theme-light .leaderboard-no-data {
 	text-align: center;
@@ -88,10 +85,6 @@
 .theme-light .leaderboard-entry {
 	background-color: #f9f9f9;
 	color: #333;
-}
-
-.theme-light .leaderboard-entry:hover {
-	background-color: var(--background-modifier-hover);
 }
 
 .theme-light .leaderboard-file-name {
@@ -106,10 +99,10 @@
 	color: var(--text-accent);
 }
 
-/*------------------- Day Mode Styling End ------------------ */
+/* ------------------- Day Mode Styling End ------------------ */
 
 
-/*-------------------  Night Mode Styling Begin ------------------- */
+/* -------------------  Night Mode Styling Begin ------------------- */
 
 .theme-dark .leaderboard-no-data {
 	text-align: center;
@@ -132,16 +125,20 @@
 }
 
 .theme-dark .leaderboard-file-path {
-    color: var(--text-muted);
+	color: var(--text-muted);
+}
+
+.theme-light .leaderboard-entry:hover {
+	background-color: var(--background-modifier-hover);
 }
 
 .theme-dark .leaderboard-entry:hover {
 	background-color: #363636;
 }
 
-/*------------------- Night Mode Styling End ------------------- */
+/* ------------------- Night Mode Styling End ------------------- */
 
-/*------------------- Modal Container Styling Begin ------------------- */
+/* ------------------- Modal Container Styling Begin ------------------- */
 
 .modal.study-time-statistics-dashboard-modal {
 	width: 90vw;
@@ -209,25 +206,22 @@
 
 .sidebar-button.active {
 	background-color: var(--interactive-accent);
-	color: white;
+	color: var(--text-on-accent);
 }
 
 .study-time-statistics-content {
 	flex: 1;
 	padding: 20px;
-	overflow-y: auto;
-	overflow-x: hidden;
-	scrollbar-width: none;
-	-ms-overflow-style: none;
+	overflow: hidden auto;
 }
 
 .study-time-statistics-content::-webkit-scrollbar {
 	display: none;
 }
 
-/*------------------- Modal Container Styling End ------------------- */
+/* ------------------- Modal Container Styling End ------------------- */
 
-/*------------------- Statistics View Styling Begin ------------------- */
+/* ------------------- Statistics View Styling Begin ------------------- */
 
 .statistics-view {
 	width: 100%;
@@ -268,7 +262,7 @@
 
 .view-mode-button.active {
 	background-color: var(--interactive-accent);
-	color: white;
+	color: var(--text-on-accent);
 	border-color: var(--interactive-accent);
 }
 
@@ -287,7 +281,7 @@
 	padding: 20px;
 	border-radius: 10px;
 	background-color: var(--background-secondary);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
 	text-align: center;
 	display: flex;
 	flex-direction: column;
@@ -339,8 +333,6 @@
 	margin-top: 25px;
 	max-height: 300px;
 	overflow-y: auto;
-	scrollbar-width: thin;
-	-ms-overflow-style: auto;
 }
 
 .stats-note-list::-webkit-scrollbar {
@@ -384,7 +376,7 @@
 }
 
 .stats-note-clickable:hover {
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+	box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
 }
 
 .stats-note-left {
@@ -433,9 +425,9 @@
 	color: var(--text-normal);
 }
 
-/*------------------- Statistics View Styling End ------------------- */
+/* ------------------- Statistics View Styling End ------------------- */
 
-/*------------------- Date Navigator Styling Begin ------------------- */
+/* ------------------- Date Navigator Styling Begin ------------------- */
 
 .date-navigator {
 	display: flex;
@@ -458,13 +450,13 @@
 	transition: all 0.2s ease;
 }
 
-.date-nav-button:hover:not(:disabled) {
-	background-color: var(--background-modifier-hover);
-}
-
 .date-nav-button:disabled {
 	opacity: 0.3;
 	cursor: not-allowed;
+}
+
+.date-nav-button:hover:not(:disabled) {
+	background-color: var(--background-modifier-hover);
 }
 
 .date-nav-button svg {
@@ -492,7 +484,7 @@
 	border: 1px solid var(--background-modifier-border);
 	border-radius: 6px;
 	background-color: var(--interactive-accent);
-	color: white;
+	color: var(--text-on-accent);
 	cursor: pointer;
 	font-size: 14px;
 	transition: all 0.2s ease;
@@ -502,9 +494,9 @@
 	opacity: 0.9;
 }
 
-/*------------------- Date Navigator Styling End ------------------- */
+/* ------------------- Date Navigator Styling End ------------------- */
 
-/*------------------- Bar Chart Styling Begin ------------------- */
+/* ------------------- Bar Chart Styling Begin ------------------- */
 
 .bar-chart-container {
 	position: relative;
@@ -576,12 +568,12 @@
 
 .bar-clickable:hover {
 	opacity: 0.9;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
 }
 
 .bar-empty {
 	opacity: 0.3;
-	cursor: default !important;
+	cursor: default;
 }
 
 .bar-empty rect {
@@ -640,9 +632,9 @@
 	font-size: 14px;
 }
 
-/*------------------- Bar Chart Styling End ------------------- */
+/* ------------------- Bar Chart Styling End ------------------- */
 
-/*------------------- Theme Specific Overrides Begin ------------------- */
+/* ------------------- Theme Specific Overrides Begin ------------------- */
 
 .theme-light .stat-card {
 	background-color: #f9f9f9;
@@ -676,11 +668,11 @@
 	background-color: #363636;
 }
 
-/*------------------- Theme Specific Overrides End ------------------- */
+/* ------------------- Theme Specific Overrides End ------------------- */
 
-/*------------------- Responsive & Mobile Styles Begin ------------------- */
+/* ------------------- Responsive & Mobile Styles Begin ------------------- */
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
 	.study-time-statistics-modal-container {
 		position: relative;
 	}
@@ -693,7 +685,7 @@
 		z-index: 1000;
 		transform: translateX(-100%);
 		transition: transform 0.3s ease;
-		box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
+		box-shadow: 2px 0 10px rgb(0 0 0 / 20%);
 		background-color: var(--background-primary);
 	}
 
@@ -704,11 +696,8 @@
 	.sidebar-overlay {
 		display: none;
 		position: fixed;
-		left: 0;
-		top: 0;
-		right: 0;
-		bottom: 0;
-		background-color: rgba(0, 0, 0, 0.5);
+		inset: 0 0 0 0;
+		background-color: rgb(0 0 0 / 50%);
 		z-index: 999;
 	}
 
@@ -731,7 +720,7 @@
 		align-items: center;
 		gap: 8px;
 		font-size: 14px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+		box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
 	}
 
 	.sidebar-toggle:hover {
@@ -757,7 +746,6 @@
 
 	.bar-chart-container {
 		overflow-x: auto;
-		scrollbar-width: thin;
 	}
 
 	.bar-chart {
@@ -775,19 +763,19 @@
 }
 
 /* Desktop: Hide toggle button */
-@media (min-width: 769px) {
+@media (width >= 769px) {
 	.sidebar-toggle {
 		display: none;
 	}
 
 	.sidebar-overlay {
-		display: none !important;
+			display: none;
 	}
 }
 
-/*------------------- Responsive & Mobile Styles End ------------------- */
+/* ------------------- Responsive & Mobile Styles End ------------------- */
 
-/*------------------- Study Time Statistics: Inline Note Analytics ------------------- */
+/* ------------------- Study Time Statistics: Inline Note Analytics ------------------- */
 
 .study-time-statistics-note-bar {
 	display: flex;
@@ -820,7 +808,7 @@
 	font-variant-numeric: tabular-nums;
 }
 
-/*------------------- Study Time Statistics: Anki-style Study Analytics ------------------- */
+/* ------------------- Study Time Statistics: Anki-style Study Analytics ------------------- */
 
 .study-analytics-view {
 	width: 100%;
@@ -1048,7 +1036,7 @@
 	white-space: nowrap;
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
 	.study-two-column {
 		grid-template-columns: 1fr;
 	}

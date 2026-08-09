@@ -1,49 +1,46 @@
-// @ts-ignore
-import en from './locale/en.json';
-// @ts-ignore
-import zh from './locale/zh.json';
+import en from "./locale/en.json";
+import zh from "./locale/zh.json";
 import {moment} from "obsidian";
 
-type Translations = { [key: string]: string };
+type Translations = Record<string, string>;
+type TranslationParams = Record<string, string | number>;
+
+const ENGLISH_TRANSLATIONS: Translations = en;
+const CHINESE_TRANSLATIONS: Translations = zh;
 
 class I18n {
-
 	private static instance: I18n;
-	private language: string;
-	private translations: { [key: string]: Translations } = {
-		en: en,
-		zh: zh
-	};
+	private readonly translations = new Map<string, Translations>([
+		["en", ENGLISH_TRANSLATIONS],
+		["zh", CHINESE_TRANSLATIONS]
+	]);
 
-	private constructor(defaultLanguage = 'en') {
-		this.language = defaultLanguage;
-	}
+	private constructor(private language = "en") {}
 
-	public static getInstance(defaultLanguage = 'en'): I18n {
-		if (!I18n.instance) {
-			I18n.instance = new I18n(defaultLanguage);
-		}
+	public static getInstance(defaultLanguage = "en"): I18n {
+		I18n.instance ??= new I18n(defaultLanguage);
 		return I18n.instance;
 	}
 
-	public setLanguage(language: string) {
+	public setLanguage(language: string): void {
 		this.language = language;
 	}
 
-	public t(key: string, params: { [key: string]: string | number } = {}): string {
-		let translation = this.translations[this.language] ? this.translations[this.language][key] : this.translations['en'][key];
-		Object.keys(params).forEach((param) => {
-			translation = translation.replace(`{${param}}`, String(params[param]));
-		});
+	public t(key: string, params: TranslationParams = {}): string {
+		const selected = this.translations.get(this.language) ?? ENGLISH_TRANSLATIONS;
+		let translation = selected[key] ?? ENGLISH_TRANSLATIONS[key] ?? key;
+		for (const [param, value] of Object.entries(params)) {
+			translation = translation.replace(`{${param}}`, String(value));
+		}
 		return translation;
 	}
 
-	public static t(key: string, params: { [key: string]: string | number } = {}): string {
+	public static t(key: string, params: TranslationParams = {}): string {
 		return I18n.getInstance().t(key, params);
 	}
 
-	public static autoDetectLanguage(defaultLanguage: string = "en") {
-		return moment.locale().split('-')[0] || defaultLanguage;
+	public static autoDetectLanguage(defaultLanguage = "en"): string {
+		return moment.locale().split("-")[0] || defaultLanguage;
 	}
 }
 

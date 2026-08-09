@@ -41,8 +41,8 @@ export function StudyAnalyticsView({plugin, onSelect}: Props) {
 				if (alive) setLoading(false);
 			}
 		};
-		load();
-		const timer = window.setInterval(load, 15000);
+		void load();
+		const timer = window.setInterval(() => { void load(); }, 15000);
 		return () => {
 			alive = false;
 			window.clearInterval(timer);

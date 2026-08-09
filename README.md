@@ -66,7 +66,7 @@ The production build generates `main.js`. A GitHub release must include `main.js
 
 ## Compatibility
 
-- Obsidian 1.4.0 or later
+- Obsidian 1.13.0 or later
 - Desktop and mobile manifests are supported; background-focus behavior depends on the operating system
 
 ## Credits and license

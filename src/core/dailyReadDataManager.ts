@@ -1,43 +1,41 @@
 import {ReadRecord} from "../interface/readRecord";
 import {TimeUtils} from "../util/timeUtils";
 import {StudySession} from "../interface/studySession";
-import {PluginDataManager} from "./pluginDataManager";
+import {DailyReadData, PluginDataManager} from "./pluginDataManager";
 
-/**
- * Stores per-day study history through Obsidian's Plugin.loadData/saveData API.
- * Keeping all plugin-owned data in data.json makes storage portable across
- * desktop and mobile without reaching into the vault adapter directly.
- */
+function emptyDailyData(): DailyReadData {
+	return {dailyReadData: {}, sessions: []};
+}
+
+/** Stores per-day study history in Obsidian's plugin data.json file. */
 export class DailyReadDataManager {
 	constructor(private readonly dataManager: PluginDataManager) {}
 
-	public async saveTodayData(category: string, data: ReadRecord) {
+	public async saveTodayData(data: ReadRecord): Promise<void> {
 		const dateToday = TimeUtils.getDateToday();
 		const existingData = await this.loadDailyData(dateToday);
-		if (!existingData[category]) existingData[category] = {};
-		existingData[category][data.fileId] = data;
-		await this.dataManager.put("dailyData", dateToday, existingData);
+		existingData.dailyReadData[data.fileId] = data;
+		await this.dataManager.setDailyReadData(dateToday, existingData);
 	}
 
-	public async saveSession(session: StudySession) {
+	public async saveSession(session: StudySession): Promise<void> {
 		const date = TimeUtils.getDateFromTimestamp(session.openedAt);
 		const existingData = await this.loadDailyData(date);
-		if (!Array.isArray(existingData.sessions)) existingData.sessions = [];
 		existingData.sessions.push(session);
-		await this.dataManager.put("dailyData", date, existingData);
+		await this.dataManager.setDailyReadData(date, existingData);
 	}
 
 	public async listDates(): Promise<string[]> {
 		await this.dataManager.loadData();
-		return Object.keys(this.dataManager.getCategory("dailyData") || {}).sort();
+		return this.dataManager.getDailyReadDates();
 	}
 
-	public async loadTodayData(): Promise<Record<string, any>> {
+	public async loadTodayData(): Promise<DailyReadData> {
 		return this.loadDailyData(TimeUtils.getDateToday());
 	}
 
-	public async loadDailyData(date: string): Promise<Record<string, any>> {
+	public async loadDailyData(date: string): Promise<DailyReadData> {
 		await this.dataManager.loadData();
-		return this.dataManager.get("dailyData", date) || {};
+		return this.dataManager.getDailyReadData(date) ?? emptyDailyData();
 	}
 }

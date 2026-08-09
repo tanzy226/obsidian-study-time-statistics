@@ -33,12 +33,12 @@ export class TimeTracker {
 		this.dailyReadDataManager = dailyReadDataManager;
 		this.statusBarManager = new StatusBarManager(plugin);
 
-		plugin.registerEvent(this.app.workspace.on("file-open", () => this.handleFileChange()));
-		plugin.registerEvent(this.app.workspace.on("active-leaf-change", () => this.handleFileChange()));
-		plugin.registerInterval(window.setInterval(() => this.handleRefresh(), this.globalRefreshTime));
+		plugin.registerEvent(this.app.workspace.on("file-open", () => { void this.handleFileChange(); }));
+		plugin.registerEvent(this.app.workspace.on("active-leaf-change", () => { void this.handleFileChange(); }));
+		plugin.registerInterval(window.setInterval(() => { this.handleRefresh(); }, this.globalRefreshTime));
 		plugin.registerDomEvent(window, "focus", () => this.handleWindowFocus());
 		plugin.registerDomEvent(window, "blur", () => this.handleWindowBlur());
-		this.app.workspace.onLayoutReady(() => this.handleFileChange());
+		this.app.workspace.onLayoutReady(() => { void this.handleFileChange(); });
 	}
 
 	private enqueue(operation: () => Promise<void>) {
@@ -49,7 +49,7 @@ export class TimeTracker {
 	}
 
 	private handleRefresh() {
-		this.enqueue(async () => {
+		void this.enqueue(async () => {
 			await this.flushElapsed();
 			this.updateStatusBar();
 		});
@@ -94,7 +94,7 @@ export class TimeTracker {
 	}
 
 	private handleWindowBlur() {
-		this.enqueue(async () => {
+		void this.enqueue(async () => {
 			await this.flushElapsed();
 			this.windowFocus = false;
 		});
@@ -109,6 +109,7 @@ export class TimeTracker {
 
 		const dailyData = await this.dailyReadDataManager.loadTodayData();
 		const fileId = this.getFileId(currentFile.path);
+		if (!fileId) return;
 		const todayReadData = dailyData.dailyReadData?.[fileId];
 		await this.saveDailyReadData(currentFile, (todayReadData?.duration || 0) + elapsed);
 		await this.dataManager.loadData();
@@ -125,35 +126,40 @@ export class TimeTracker {
 
 	public async saveDailyReadData(file: TFile, duration: number) {
 		const readRecord: ReadRecord = this.buildReadData(file, duration, 0, true);
-		await this.dailyReadDataManager.saveTodayData("dailyReadData", readRecord);
+		await this.dailyReadDataManager.saveTodayData(readRecord);
 	}
 
 	public async saveTotalReadData(file: TFile, duration: number, openCount: number) {
 		const readRecord: ReadRecord = this.buildReadData(file, duration, openCount, false);
-		await this.dataManager.put("readData", readRecord.filePath, readRecord);
+		await this.dataManager.setReadRecord(readRecord.filePath, readRecord);
 	}
 
 	private buildReadData(file: TFile, duration: number, openCount: number, isDailyData: boolean): ReadRecord {
 		if (isDailyData) {
-			return {filePath: "", openCount: 0, fileId: this.getFileId(file.path), duration};
+			return {
+				filePath: "",
+				openCount: 0,
+				fileId: this.getFileId(file.path) ?? this.getOrCreateFileId(file.path),
+				duration
+			};
 		}
 		return {
 			fileId: this.getOrCreateFileId(file.path),
 			filePath: file.path,
 			duration,
 			openCount,
-			firstOpenedAt: this.dataManager.get("readData", file.path)?.firstOpenedAt,
-			lastOpenedAt: this.dataManager.get("readData", file.path)?.lastOpenedAt
+			firstOpenedAt: this.dataManager.getReadRecord(file.path)?.firstOpenedAt,
+			lastOpenedAt: this.dataManager.getReadRecord(file.path)?.lastOpenedAt
 		};
 	}
 
-	private getOrCreateFileId(filePath: string) {
-		const readData = this.dataManager.get("readData", filePath);
+	private getOrCreateFileId(filePath: string): string {
+		const readData = this.dataManager.getReadRecord(filePath);
 		return readData?.fileId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 	}
 
-	private getFileId(filePath: string) {
-		return this.dataManager.get("readData", filePath)?.fileId;
+	private getFileId(filePath: string): string | undefined {
+		return this.dataManager.getReadRecord(filePath)?.fileId;
 	}
 
 	private async incTotalReadCount(file: TFile): Promise<ReadRecord> {
@@ -167,7 +173,7 @@ export class TimeTracker {
 		);
 		totalRecord.firstOpenedAt ||= Date.now();
 		totalRecord.lastOpenedAt = Date.now();
-		await this.dataManager.put("readData", totalRecord.filePath, totalRecord);
+		await this.dataManager.setReadRecord(totalRecord.filePath, totalRecord);
 		return totalRecord;
 	}
 
@@ -182,19 +188,19 @@ export class TimeTracker {
 	}
 
 	public getTotalReadData(file: TFile): ReadRecord | undefined {
-		return this.dataManager.get("readData", RecordUtils.generateFileId(file));
+		return this.dataManager.getReadRecord(RecordUtils.generateFileId(file));
 	}
 
 	public unload() {
-		this.enqueue(async () => {
+		void this.enqueue(async () => {
 			await this.flushElapsed();
 			await this.finishCurrentSession();
 		});
 		this.statusBarManager.remove();
 	}
 
-	private isStrictMode() {
-		return this.dataManager.get("settings", "strictMode") ?? true;
+	private isStrictMode(): boolean {
+		return this.dataManager.getStrictMode();
 	}
 
 	private needSuspendTimer() {

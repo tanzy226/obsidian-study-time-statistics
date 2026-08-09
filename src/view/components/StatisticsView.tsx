@@ -20,7 +20,7 @@ export function StatisticsView(props: StatisticsViewProps) {
 	const handleNoteClick = (filePath: string) => {
 		const file = plugin.app.vault.getAbstractFileByPath(normalizePath(filePath));
 		if (file && file instanceof TFile) {
-			plugin.app.workspace.getLeaf().openFile(file).finally();
+			void plugin.app.workspace.getLeaf().openFile(file);
 			if (onSelect) {
 				onSelect(filePath);
 			}
@@ -37,7 +37,7 @@ export function StatisticsView(props: StatisticsViewProps) {
 	const [totalStats, setTotalStats] = React.useState<TotalStats | null>(null);
 	const [recentYearsData, setRecentYearsData] = React.useState<Array<{ year: number; totalDuration: number; focusDays: number; noteCount: number }>>([]);
 	React.useEffect(() => {
-		loadData();
+		void loadData();
 	}, [viewMode, currentDate]);
 
 	const loadData = async () => {
@@ -164,9 +164,9 @@ export function StatisticsView(props: StatisticsViewProps) {
 
 		for (let i = 0; i < 7; i++) {
 			const dayIndex = currentDay.getDay();
-			chartData.push({
-				label: I18n.t(dayKeys[dayIndex]),
-				value: dailyDataMap[dayIndex]
+				chartData.push({
+					label: I18n.t(dayKeys[dayIndex] ?? 'sunday'),
+					value: dailyDataMap[dayIndex] ?? 0
 			});
 			currentDay.setDate(currentDay.getDate() + 1);
 		}
@@ -256,15 +256,15 @@ export function StatisticsView(props: StatisticsViewProps) {
 
 		monthlyStats.dailyStats.forEach(dayStats => {
 			const dateParts = dayStats.date.split('-');
-			const day = parseInt(dateParts[2]);
-			dailyDataMap[day] = dayStats.totalDuration;
+				const day = Number.parseInt(dateParts[2] ?? '', 10);
+				if (Number.isFinite(day)) dailyDataMap[day] = dayStats.totalDuration;
 		});
 
 		const chartData: BarChartData[] = [];
 		for (let day = 1; day <= daysInMonth; day++) {
 			chartData.push({
 				label: String(day),
-				value: dailyDataMap[day]
+					value: dailyDataMap[day] ?? 0
 			});
 		}
 
@@ -311,9 +311,9 @@ export function StatisticsView(props: StatisticsViewProps) {
 			monthlyData[month.month] = month.totalDuration;
 		});
 
-		const chartData: BarChartData[] = Object.keys(monthlyData).map(month => ({
-			label: month,
-			value: monthlyData[parseInt(month)]
+			const chartData: BarChartData[] = Object.keys(monthlyData).map(month => ({
+				label: month,
+				value: monthlyData[Number.parseInt(month, 10)] ?? 0
 		}));
 
 		return (
@@ -364,9 +364,9 @@ export function StatisticsView(props: StatisticsViewProps) {
 
 		const yearChartData: BarChartData[] = [];
 		for (let year = startYear; year <= currentYear; year++) {
-			yearChartData.push({
-				label: String(year),
-				value: yearDataMap[year]
+				yearChartData.push({
+					label: String(year),
+					value: yearDataMap[year] ?? 0
 			});
 		}
 
@@ -477,4 +477,3 @@ export function StatisticsView(props: StatisticsViewProps) {
 		</div>
 	);
 }
-

@@ -1,8 +1,8 @@
 {
 	"id": "study-time-statistics",
 	"name": "Study Time Statistics",
-	"version": "1.0.1",
-	"minAppVersion": "1.4.0",
+	"version": "1.0.2",
+	"minAppVersion": "1.13.0",
 	"description": "Private, local-first study analytics for notes and PDFs: sessions, streaks, heatmaps, trends, and rankings.",
 	"author": "tanzy226",
 	"authorUrl": "https://github.com/tanzy226",

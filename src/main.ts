@@ -28,22 +28,21 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 		return this._studyAnalyticsService;
 	}
 
-	private timeTracker: TimeTracker;
-	private _dataManager: PluginDataManager;
-	private dailyReadDataManager: DailyReadDataManager;
-	private _dataAnalyzer: DataAnalyzer;
-	private _focusDataAggregator: FocusDataAggregator;
-	private noteStatsBarManager: NoteStatsBarManager;
-	private _studyAnalyticsService: StudyAnalyticsService;
+	private timeTracker?: TimeTracker;
+	private _dataManager!: PluginDataManager;
+	private dailyReadDataManager!: DailyReadDataManager;
+	private _dataAnalyzer!: DataAnalyzer;
+	private _focusDataAggregator!: FocusDataAggregator;
+	private noteStatsBarManager?: NoteStatsBarManager;
+	private _studyAnalyticsService!: StudyAnalyticsService;
 
 	async onload() {
 
 		this._dataManager = new PluginDataManager(this);
 		this.dailyReadDataManager = new DailyReadDataManager(this._dataManager);
 
-		this.dataManager.loadData().then(() => {
-			this.init();
-		});
+		await this.dataManager.loadData();
+		this.init();
 
 	}
 
@@ -59,7 +58,7 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 	private init() {
 		this.setLanguage();
 		this.timeTracker = new TimeTracker(this, this.app, this._dataManager, this.dailyReadDataManager);
-		this._dataAnalyzer = new DataAnalyzer(this, this.app, this._dataManager, this.dailyReadDataManager);
+		this._dataAnalyzer = new DataAnalyzer(this, this.app, this._dataManager);
 		this._focusDataAggregator = new FocusDataAggregator(this.app, this._dataManager, this.dailyReadDataManager);
 		this._studyAnalyticsService = new StudyAnalyticsService(this.app, this._dataManager, this.dailyReadDataManager);
 		this.noteStatsBarManager = new NoteStatsBarManager(this, this.app, this._dataManager);

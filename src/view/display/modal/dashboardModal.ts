@@ -44,6 +44,6 @@ export class DashboardModal extends Modal {
 			new Notice(I18n.t("fileNotFound"));
 			return;
 		}
-		this.app.workspace.getLeaf().openFile(file).finally();
+			void this.app.workspace.getLeaf().openFile(file);
 	}
 }

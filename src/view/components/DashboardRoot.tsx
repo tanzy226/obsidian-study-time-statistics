@@ -114,7 +114,7 @@ function LeaderboardView(props: { plugin: StudyTimeStatisticsPlugin; onSelect: (
         <div>
             <h2 className="leaderboard-modal-title">{I18n.t('leaderboardTitle')}</h2>
             <div className="leaderboard-container">
-                {leaderboardData.map((item: any, index: number) => {
+                {leaderboardData.map((item, index) => {
                     const formattedReadTime = TimeUtils.getFormattedReadingTime(item.totalTime);
                     const noteName = getFormattedNoteName(item.filePath);
                     return (
@@ -144,4 +144,3 @@ function getFormattedNoteName(filePath: string) {
         return noteName;
     }
 }
-
