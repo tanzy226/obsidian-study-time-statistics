@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas / 问题与想法讨论
+    url: https://github.com/tanzy226/obsidian-study-time-statistics/discussions
+    about: Ask for help or discuss an idea before filing an issue. / 在提交 Issue 前先提问或讨论想法。

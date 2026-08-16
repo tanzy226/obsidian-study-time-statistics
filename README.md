@@ -41,7 +41,9 @@ Select the bar-chart icon in the left ribbon, or open the Command Palette and ru
 
 ### Community Plugins
 
-Community-directory publication is pending. Once listed, open **Settings → Community plugins → Browse**, search for **Study Time Statistics**, and select **Install**.
+Study Time Statistics is available in the Obsidian Community Plugins directory. Open **Settings → Community plugins → Browse**, search for **Study Time Statistics**, and select **Install**.
+
+[View Study Time Statistics in the Obsidian plugin directory](https://obsidian.md/plugins?id=study-time-statistics)
 
 ### Manual installation
 
@@ -53,6 +55,15 @@ Community-directory publication is pending. Once listed, open **Settings → Com
 ## Privacy and storage
 
 All data stays under `.obsidian/plugins/study-time-statistics/` in your own vault. The plugin stores note paths and local study metrics needed for its charts. It does not send data over the network. The public screenshots and tables contain a permissioned, point-in-time snapshot of real aggregate values, but every note title, path, folder, and content field has been removed or replaced with an anonymous label.
+
+## Feedback and support
+
+- [Report a bug](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=bug_report.yml)
+- [Report inaccurate statistics](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=data_accuracy.yml)
+- [Suggest a feature](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=feature_request.yml)
+- [Ask a question or share an idea](https://github.com/tanzy226/obsidian-study-time-statistics/discussions)
+
+Before posting screenshots or logs, replace private note titles and paths with anonymous examples.
 
 ## Development
 

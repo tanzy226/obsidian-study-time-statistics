@@ -39,7 +39,9 @@ Study Time Statistics 是一款注重隐私的 Obsidian 学习时间统计插件
 
 ### 社区插件市场
 
-社区目录正在申请收录。收录后，可打开 **设置 → 第三方插件 → 浏览**，搜索 **Study Time Statistics** 并安装。
+插件已收录到 Obsidian 社区插件目录。打开 **设置 → 第三方插件 → 浏览**，搜索 **Study Time Statistics** 即可安装。
+
+[在 Obsidian 插件目录中查看 Study Time Statistics](https://obsidian.md/plugins?id=study-time-statistics)
 
 ### 手动安装
 
@@ -51,6 +53,15 @@ Study Time Statistics 是一款注重隐私的 Obsidian 学习时间统计插件
 ## 隐私与数据位置
 
 全部数据只保存在你自己的库内，位置为 `.obsidian/plugins/study-time-statistics/`。插件会存储绘图所需的笔记路径与本地学习指标，但不会通过网络发送数据。本仓库的公开图片与表格使用经许可的真实汇总数值快照，但真实笔记标题、路径、文件夹和正文已经全部删除或替换为匿名标签。
+
+## 反馈与支持
+
+- [报告错误](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=bug_report.yml)
+- [报告统计不准确](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=data_accuracy.yml)
+- [提交功能建议](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=feature_request.yml)
+- [提问或讨论想法](https://github.com/tanzy226/obsidian-study-time-statistics/discussions)
+
+提交截图或日志前，请用匿名示例替换私人笔记标题和路径。
 
 ## 开发与测试
 

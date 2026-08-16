@@ -1,0 +1,27 @@
+name: Feature request / 功能建议
+description: Suggest an improvement without sharing private vault content / 提交不包含私密库内容的改进建议
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for the suggestion. Please replace private note titles and paths with anonymous examples. / 感谢你的建议。请用匿名示例替换私人笔记标题和路径。
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / 使用中的问题
+      description: What are you trying to accomplish, and what is difficult today? / 你想完成什么，目前哪里不方便？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution / 建议方案
+      description: Describe the behavior you would like to see. / 说明你期望的功能和交互方式。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives / 替代方案
+      description: Optional workarounds or related plugins you have tried. / 可选：你尝试过的临时方案或相关插件。

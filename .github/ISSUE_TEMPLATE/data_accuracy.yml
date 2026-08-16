@@ -1,0 +1,49 @@
+name: Inaccurate statistics / 统计不准确
+description: Report unexpected time, session, or open-count results / 报告异常的时长、会话或打开次数
+title: "[Accuracy]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not upload your plugin data file. Replace note titles, paths, and timestamps that reveal private activity with anonymous examples. / 请勿上传插件数据文件。请匿名处理笔记标题、路径及可能暴露私人活动的时间。
+  - type: input
+    id: versions
+    attributes:
+      label: Versions / 版本信息
+      description: Obsidian version, plugin version, operating system, and desktop or mobile / Obsidian 版本、插件版本、操作系统及桌面端或移动端
+    validations:
+      required: true
+  - type: dropdown
+    id: metric
+    attributes:
+      label: Affected metric / 受影响的指标
+      options:
+        - Reading time / 阅读时间
+        - Opens / 打开次数
+        - Sessions / 会话数
+        - Average or longest session / 平均或最长会话
+        - Active days or streak / 活跃天数或连续天数
+        - Dashboard aggregation / 仪表盘汇总
+        - Other / 其他
+    validations:
+      required: true
+  - type: textarea
+    id: sequence
+    attributes:
+      label: What happened / 操作经过
+      description: Describe the anonymized sequence of opening, switching, focusing, or closing notes. / 说明经过匿名处理的打开、切换、聚焦或关闭笔记过程。
+    validations:
+      required: true
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: Expected and actual result / 预期与实际结果
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check / 隐私确认
+      options:
+        - label: I removed private note names, paths, content, and identifying timestamps. / 我已删除私人笔记名、路径、正文及可识别时间。
+          required: true
