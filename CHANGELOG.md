@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Replaced clipped month/day labels in the 30-day charts with a clear relative 1–30 axis; exact calendar dates remain available in each bar's tooltip.
+
 ## 2.1.0 — 2026-09-16
 
 - Kept yearly, 30-day, and 24-hour charts compact and automatically aligned to the newest data on the right.

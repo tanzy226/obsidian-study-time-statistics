@@ -1,12 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {compactDateLabel} from "../src/util/chartUtils";
+import {recentDayAxisLabel} from "../src/util/chartUtils";
 
-test("compact chart dates retain both month and day without leading zero noise", () => {
-	assert.equal(compactDateLabel("2026-08-20"), "8/20");
-	assert.equal(compactDateLabel("2026-09-01"), "9/1");
+test("30-day charts use a readable 1-to-30 relative axis", () => {
+	assert.deepEqual(
+		Array.from({length: 30}, (_, index) => recentDayAxisLabel(index, 30)).filter(Boolean),
+		["1", "5", "10", "15", "20", "25", "30"]
+	);
 });
 
-test("compact chart date formatter keeps an invalid label unchanged", () => {
-	assert.equal(compactDateLabel("unknown"), "unknown");
+test("relative chart axes always include both endpoints", () => {
+	assert.equal(recentDayAxisLabel(0, 12), "1");
+	assert.equal(recentDayAxisLabel(11, 12), "12");
+	assert.equal(recentDayAxisLabel(1, 12), "");
 });

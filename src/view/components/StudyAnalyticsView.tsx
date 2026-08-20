@@ -3,7 +3,7 @@ import StudyTimeStatisticsPlugin from "../../main";
 import {NoteStudyRow, StudyAnalyticsResult} from "../../core/studyAnalytics";
 import {TimeUtils} from "../../util/timeUtils";
 import I18n from "../../language/i18n";
-import {compactDateLabel} from "../../util/chartUtils";
+import {recentDayAxisLabel} from "../../util/chartUtils";
 
 interface Props {
 	plugin: StudyTimeStatisticsPlugin;
@@ -89,10 +89,10 @@ export function StudyAnalyticsView({plugin, onSelect}: Props) {
 
 			<div className="study-two-column">
 				<Section title={I18n.t("last30ReadingTime")} subtitle={I18n.t("reviewTimeEquivalent")}>
-					<SimpleBars labelStep={5} items={last30.map(point => ({label: compactDateLabel(point.date), value: point.totalTime, title: `${point.date} · ${TimeUtils.getPreciseFormattedReadingTime(point.totalTime)}`}))} />
+					<SimpleBars items={last30.map((point, index) => ({label: recentDayAxisLabel(index, last30.length), value: point.totalTime, title: `${point.date} · ${TimeUtils.getPreciseFormattedReadingTime(point.totalTime)}`}))} />
 				</Section>
 				<Section title={I18n.t("last30Sessions")} subtitle={I18n.t("reviewsEquivalent")}>
-					<SimpleBars labelStep={5} items={last30.map(point => ({label: compactDateLabel(point.date), value: point.sessionCount, title: `${point.date} · ${I18n.t("times", {count: point.sessionCount})}`}))} />
+					<SimpleBars items={last30.map((point, index) => ({label: recentDayAxisLabel(index, last30.length), value: point.sessionCount, title: `${point.date} · ${I18n.t("times", {count: point.sessionCount})}`}))} />
 				</Section>
 			</div>
 
@@ -150,7 +150,7 @@ function SimpleBars({items, labelStep = 1}: {items: Array<{label: string; value:
 	}, [items.length]);
 	return <div className={`study-simple-bars ${items.length > 12 ? "is-dense" : ""}`} ref={scrollRef}>{items.map((item, index) => {
 		const barHeight = Math.max(item.value ? 4 : 0, item.value / max * 100);
-		const showLabel = index === 0 || index === items.length - 1 || index % labelStep === 0;
+		const showLabel = Boolean(item.label) && (labelStep === 1 || index === 0 || index === items.length - 1 || index % labelStep === 0);
 		return <div className="study-simple-bar-item" key={`${item.label}-${index}`} title={item.title}>
 			<div className="study-simple-bar-track"><svg className="study-simple-bar-fill" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label={item.title}><rect x="0" y={100 - barHeight} width="100" height={barHeight} rx="3" /></svg></div>
 			<span className="study-simple-bar-label" aria-hidden={!showLabel}>{showLabel ? item.label : ""}</span>
