@@ -88,16 +88,16 @@ export function StudyAnalyticsView({plugin, onSelect}: Props) {
 
 			<div className="study-two-column">
 				<Section title={I18n.t("last30ReadingTime")} subtitle={I18n.t("reviewTimeEquivalent")}>
-					<SimpleBars items={last30.map(point => ({label: point.date.slice(5), value: point.totalTime, title: `${point.date} · ${TimeUtils.getPreciseFormattedReadingTime(point.totalTime)}`}))} />
+					<SimpleBars labelStep={5} items={last30.map(point => ({label: point.date.slice(5), value: point.totalTime, title: `${point.date} · ${TimeUtils.getPreciseFormattedReadingTime(point.totalTime)}`}))} />
 				</Section>
 				<Section title={I18n.t("last30Sessions")} subtitle={I18n.t("reviewsEquivalent")}>
-					<SimpleBars items={last30.map(point => ({label: point.date.slice(5), value: point.sessionCount, title: `${point.date} · ${I18n.t("times", {count: point.sessionCount})}`}))} />
+					<SimpleBars labelStep={5} items={last30.map(point => ({label: point.date.slice(5), value: point.sessionCount, title: `${point.date} · ${I18n.t("times", {count: point.sessionCount})}`}))} />
 				</Section>
 			</div>
 
 			<div className="study-two-column">
 				<Section title={I18n.t("hourlyDistribution")} subtitle={I18n.t("hourlyDistributionDesc")}>
-					<SimpleBars items={data.hourly.map(item => ({label: item.label, value: item.duration, title: `${item.label}:00 · ${I18n.t("times", {count: item.count})} · ${TimeUtils.getPreciseFormattedReadingTime(item.duration)}`}))} />
+					<SimpleBars labelStep={2} items={data.hourly.map(item => ({label: item.label, value: item.duration, title: `${item.label}:00 · ${I18n.t("times", {count: item.count})} · ${TimeUtils.getPreciseFormattedReadingTime(item.duration)}`}))} />
 				</Section>
 				<Section title={I18n.t("weekdayDistribution")} subtitle={I18n.t("weekdayDistributionDesc")}>
 					<SimpleBars items={data.weekdays.map(item => ({label: I18n.t(item.label), value: item.duration, title: `${I18n.t(item.label)} · ${I18n.t("times", {count: item.count})} · ${TimeUtils.getPreciseFormattedReadingTime(item.duration)}`}))} />
@@ -140,20 +140,31 @@ function Section({title, subtitle, children}: {title: string; subtitle?: string;
 	return <section className="study-section"><div className="study-section-heading"><h3>{title}</h3>{subtitle && <span>{subtitle}</span>}</div>{children}</section>;
 }
 
-function SimpleBars({items}: {items: Array<{label: string; value: number; title: string}>}) {
+function SimpleBars({items, labelStep = 1}: {items: Array<{label: string; value: number; title: string}>; labelStep?: number}) {
 	const max = Math.max(1, ...items.map(item => item.value));
-	return <div className="study-simple-bars">{items.map((item, index) => {
+	const scrollRef = React.useRef<HTMLDivElement>(null);
+	React.useLayoutEffect(() => {
+		const element = scrollRef.current;
+		if (element) element.scrollLeft = element.scrollWidth;
+	}, [items.length]);
+	return <div className={`study-simple-bars ${items.length > 12 ? "is-dense" : ""}`} ref={scrollRef}>{items.map((item, index) => {
 		const barHeight = Math.max(item.value ? 4 : 0, item.value / max * 100);
+		const showLabel = index === 0 || index === items.length - 1 || index % labelStep === 0;
 		return <div className="study-simple-bar-item" key={`${item.label}-${index}`} title={item.title}>
 			<div className="study-simple-bar-track"><svg className="study-simple-bar-fill" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label={item.title}><rect x="0" y={100 - barHeight} width="100" height={barHeight} rx="3" /></svg></div>
-			<span>{item.label}</span>
+			<span className="study-simple-bar-label" aria-hidden={!showLabel}>{showLabel ? item.label : ""}</span>
 		</div>;
 	})}</div>;
 }
 
 function Heatmap({points}: {points: Array<{date: string; totalTime: number; sessionCount: number}>}) {
 	const max = Math.max(1, ...points.map(point => point.totalTime));
-	return <div className="study-heatmap" aria-label={I18n.t("heatmapAriaLabel")}>{points.map(point => {
+	const scrollRef = React.useRef<HTMLDivElement>(null);
+	React.useLayoutEffect(() => {
+		const element = scrollRef.current;
+		if (element) element.scrollLeft = element.scrollWidth;
+	}, [points.length]);
+	return <div className="study-heatmap" ref={scrollRef} aria-label={I18n.t("heatmapAriaLabel")}>{points.map(point => {
 		const level = point.totalTime === 0 ? 0 : Math.min(4, Math.max(1, Math.ceil(point.totalTime / max * 4)));
 		return <div key={point.date} className={`study-heatmap-cell level-${level}`} title={`${point.date} · ${I18n.t("times", {count: point.sessionCount})} · ${TimeUtils.getPreciseFormattedReadingTime(point.totalTime)}`} />;
 	})}</div>;

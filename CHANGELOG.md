@@ -2,6 +2,7 @@
 
 ## 1.3.0 — 2026-09-02
 
+- Made yearly, 30-day, and 24-hour charts denser, prevented date-label overlap, and automatically positioned scrollable charts at the newest data on the right.
 - Added private daily and weekly study targets with 28-day completion trends and goal streaks.
 - Added a data-quality review queue for long low-interaction sessions classified as needing review.
 - Added one-click confirmation of quiet study or interactive reading without silently deleting ambiguous time.
