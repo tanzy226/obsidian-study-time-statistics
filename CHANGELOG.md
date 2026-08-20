@@ -2,6 +2,7 @@
 
 ## 2.0.0 — 2026-09-09
 
+- Made yearly, 30-day, and 24-hour charts denser, prevented date-label overlap, and automatically positioned scrollable charts at the newest data on the right.
 - Added a redesigned Study Cockpit as the default dashboard home.
 - Combined today and weekly reading, goal progress, week-over-week change, median session length, deep-reading share, verified-study share, and the highest-investment hour.
 - Added a local revisit suggestion queue for notes not opened in seven days; suggestions never claim forgetting or mastery.
