@@ -186,5 +186,22 @@
 	"engagementInteractive": "Interactive",
 	"engagementQuietStudy": "Quiet study",
 	"engagementUncertain": "Needs review",
-	"engagementUnclassified": "Unclassified"
+	"engagementUnclassified": "Unclassified",
+	"studyGoals": "Study goals",
+	"studyGoalsDesc": "Set local daily and weekly targets, then review long sessions that may be quiet study or idle time.",
+	"dailyGoalMinutes": "Daily target (minutes)",
+	"weeklyGoalMinutes": "Weekly target (minutes)",
+	"saveGoals": "Save goals",
+	"goalsSaved": "Study goals saved.",
+	"todayGoalProgress": "Today’s goal",
+	"weeklyGoalProgress": "This week’s goal",
+	"goalDaysReached": "Goal days · last 28",
+	"goalStreak": "Goal streak",
+	"goalTrend": "28-day goal trend",
+	"goalTrendDesc": "Numbers show active study minutes per day",
+	"dataQualityReview": "Data-quality review",
+	"dataQualityReviewDesc": "Only sessions that need your judgment are shown; nothing is deleted automatically.",
+	"noUncertainSessions": "No sessions currently need review.",
+	"confirmQuietStudy": "Confirm quiet study",
+	"confirmInteractive": "Confirm interactive"
 }

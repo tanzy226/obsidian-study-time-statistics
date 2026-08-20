@@ -5,7 +5,7 @@ import {createLegacySessionId, createSessionId, isStudySessionSource} from "../u
 import {ReadingProgressEntry, ReadingProgressInput} from "../interface/readingProgress";
 import {clampPercent, createProgressId} from "../util/readingProgressUtils";
 
-export const CURRENT_DATA_VERSION = 3;
+export const CURRENT_DATA_VERSION = 4;
 
 export interface DailyReadData {
 	dailyReadData: Record<string, ReadRecord>;
@@ -20,6 +20,8 @@ interface PluginData {
 	settings: {
 		strictMode?: boolean;
 		progressTrackingEnabled?: boolean;
+		dailyGoalMinutes?: number;
+		weeklyGoalMinutes?: number;
 	};
 }
 
@@ -144,6 +146,8 @@ function parsePluginData(value: unknown): PluginData {
 	const rawSettings = asObject(source.settings);
 	const strictMode = rawSettings?.strictMode;
 	const progressTrackingEnabled = rawSettings?.progressTrackingEnabled;
+	const dailyGoalMinutes = rawSettings?.dailyGoalMinutes;
+	const weeklyGoalMinutes = rawSettings?.weeklyGoalMinutes;
 	const rawProgressEntries = source.progressEntries;
 	return {
 		dataVersion: CURRENT_DATA_VERSION,
@@ -154,7 +158,9 @@ function parsePluginData(value: unknown): PluginData {
 			: [],
 		settings: {
 			...(typeof strictMode === "boolean" ? {strictMode} : {}),
-			...(typeof progressTrackingEnabled === "boolean" ? {progressTrackingEnabled} : {})
+			...(typeof progressTrackingEnabled === "boolean" ? {progressTrackingEnabled} : {}),
+			...(typeof dailyGoalMinutes === "number" && Number.isFinite(dailyGoalMinutes) ? {dailyGoalMinutes: Math.max(0, dailyGoalMinutes)} : {}),
+			...(typeof weeklyGoalMinutes === "number" && Number.isFinite(weeklyGoalMinutes) ? {weeklyGoalMinutes: Math.max(0, weeklyGoalMinutes)} : {})
 		}
 	};
 }
@@ -241,6 +247,20 @@ export class PluginDataManager {
 
 	public async setProgressTrackingEnabled(value: boolean): Promise<void> {
 		await this.mutate(data => { data.settings.progressTrackingEnabled = value; });
+	}
+
+	public getStudyGoals(): {dailyMinutes: number; weeklyMinutes: number} {
+		return {
+			dailyMinutes: this.data.settings.dailyGoalMinutes ?? 30,
+			weeklyMinutes: this.data.settings.weeklyGoalMinutes ?? 180
+		};
+	}
+
+	public async setStudyGoals(dailyMinutes: number, weeklyMinutes: number): Promise<void> {
+		await this.mutate(data => {
+			data.settings.dailyGoalMinutes = Math.max(0, dailyMinutes);
+			data.settings.weeklyGoalMinutes = Math.max(0, weeklyMinutes);
+		});
 	}
 
 	public getProgressEntries(filePath?: string): ReadingProgressEntry[] {
@@ -360,6 +380,16 @@ export class PluginDataManager {
 			if (!existing) return false;
 			this.removeSessionFromDay(data, id);
 			this.applySessionDelta(data, existing, -1);
+			return true;
+		});
+	}
+
+	public async setSessionEngagement(id: string, engagement: StudySession["engagement"]): Promise<boolean> {
+		return this.mutate(data => {
+			const session = this.findSession(data, id);
+			if (!session) return false;
+			session.engagement = engagement;
+			session.updatedAt = Date.now();
 			return true;
 		});
 	}

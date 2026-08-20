@@ -7,8 +7,9 @@ import { setIcon } from "obsidian";
 import { StudyAnalyticsView } from "./StudyAnalyticsView";
 import {SessionHistoryView} from "./SessionHistoryView";
 import {ReadingProgressView} from "./ReadingProgressView";
+import {StudyGoalsView} from "./StudyGoalsView";
 
-type ViewType = 'leaderboard' | 'statistics' | 'studyAnalytics' | 'sessions' | 'progress';
+type ViewType = 'leaderboard' | 'statistics' | 'studyAnalytics' | 'sessions' | 'progress' | 'goals';
 
 export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSelect: (filePath: string) => void }) {
     const { plugin, onSelect } = props;
@@ -82,6 +83,12 @@ export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSele
                     onClick={() => handleViewChange('studyAnalytics')}
                 />
                 <SidebarButton
+					icon="target"
+					label={I18n.t('studyGoals')}
+					active={viewType === 'goals'}
+					onClick={() => handleViewChange('goals')}
+				/>
+				<SidebarButton
                     icon="history"
                     label={I18n.t('sessionHistory')}
                     active={viewType === 'sessions'}
@@ -107,6 +114,7 @@ export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSele
                 {viewType === 'studyAnalytics' && <StudyAnalyticsView plugin={plugin} onSelect={onSelect} />}
                 {viewType === 'sessions' && <SessionHistoryView plugin={plugin} onSelect={onSelect} />}
                 {viewType === 'progress' && <ReadingProgressView plugin={plugin} onSelect={onSelect} />}
+				{viewType === 'goals' && <StudyGoalsView plugin={plugin} onSelect={onSelect} />}
             </div>
         </div>
     );

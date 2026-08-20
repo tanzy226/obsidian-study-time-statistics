@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0 — 2026-09-02
+
+- Added private daily and weekly study targets with 28-day completion trends and goal streaks.
+- Added a data-quality review queue for long low-interaction sessions classified as needing review.
+- Added one-click confirmation of quiet study or interactive reading without silently deleting ambiguous time.
+- Preserved all 1.2 data through a version 4 migration with conservative default goals.
+
 ## 1.2.0 — 2026-08-26
 
 - Added optional, self-reported Reading Coverage without presenting it as absorption, understanding, memory, or mastery.

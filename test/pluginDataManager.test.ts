@@ -183,6 +183,14 @@ test("1.1 data migrates with optional reading coverage disabled", async () => {
 	assert.deepEqual(manager.getProgressEntries(), []);
 });
 
+test("1.2 data migrates with safe default study goals", async () => {
+	const {manager} = createManager({dataVersion: 3, readData: {}, dailyData: {}, progressEntries: [], settings: {}});
+	await manager.loadData();
+	assert.deepEqual(manager.getStudyGoals(), {dailyMinutes: 30, weeklyMinutes: 180});
+	await manager.setStudyGoals(45, 240);
+	assert.deepEqual(manager.getStudyGoals(), {dailyMinutes: 45, weeklyMinutes: 240});
+});
+
 test("reading coverage entries can be created, edited, filtered, and deleted", async () => {
 	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
 	await manager.loadData();
