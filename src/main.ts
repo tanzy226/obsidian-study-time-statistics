@@ -10,6 +10,7 @@ import {RibbonFactory} from "./view/display/ribbon/ribbonFactory";
 import {FocusDataAggregator} from "./core/focusDataAggregator";
 import {NoteStatsBarManager} from "./view/display/noteStatsBar/noteStatsBarManager";
 import {StudyAnalyticsService} from "./core/studyAnalyticsService";
+import {DataBackupService} from "./core/dataBackupService";
 
 export default class StudyTimeStatisticsPlugin extends Plugin {
 	get dataAnalyzer(): DataAnalyzer {
@@ -28,6 +29,10 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 		return this._studyAnalyticsService;
 	}
 
+	get backupService(): DataBackupService {
+		return this._backupService;
+	}
+
 	private timeTracker?: TimeTracker;
 	private _dataManager!: PluginDataManager;
 	private dailyReadDataManager!: DailyReadDataManager;
@@ -35,6 +40,7 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 	private _focusDataAggregator!: FocusDataAggregator;
 	private noteStatsBarManager?: NoteStatsBarManager;
 	private _studyAnalyticsService!: StudyAnalyticsService;
+	private _backupService!: DataBackupService;
 
 	async onload() {
 
@@ -61,6 +67,7 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 		this._dataAnalyzer = new DataAnalyzer(this, this.app, this._dataManager);
 		this._focusDataAggregator = new FocusDataAggregator(this.app, this._dataManager, this.dailyReadDataManager);
 		this._studyAnalyticsService = new StudyAnalyticsService(this.app, this._dataManager, this.dailyReadDataManager);
+		this._backupService = new DataBackupService(this.app, this._dataManager);
 		this.noteStatsBarManager = new NoteStatsBarManager(this, this.app, this._dataManager);
 		this.addSettingTab(new StudyTimeStatisticsSettingTab(this.app, this));
 		RibbonFactory.createLeaderboardRibbon(this, this.app);

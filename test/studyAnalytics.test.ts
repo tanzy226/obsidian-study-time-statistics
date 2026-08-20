@@ -8,6 +8,20 @@ function at(year: number, month: number, day: number, hour = 10) {
 	return new Date(year, month - 1, day, hour, 0, 0, 0).getTime();
 }
 
+function session(id: string, fileId: string, filePath: string, openedAt: number, duration: number): StudySession {
+	return {
+		id,
+		fileId,
+		filePath,
+		openedAt,
+		closedAt: openedAt + duration,
+		duration,
+		source: "automatic",
+		createdAt: openedAt,
+		updatedAt: openedAt + duration
+	};
+}
+
 test("calculateStreaks handles current and longest consecutive runs", () => {
 	const result = calculateStreaks(
 		["2026-08-01", "2026-08-02", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09", "2026-08-10"],
@@ -32,9 +46,9 @@ test("buildStudyAnalytics calculates summaries, rankings and distributions", () 
 		{fileId: "b", filePath: "论文/B.md", duration: 6000, openCount: 2, lastOpenedAt: at(2026, 8, 10, 18)}
 	];
 	const sessions: StudySession[] = [
-		{fileId: "a", filePath: "课程/A.md", openedAt: at(2026, 8, 9, 9), closedAt: at(2026, 8, 9, 9), duration: 1000},
-		{fileId: "a", filePath: "课程/A.md", openedAt: at(2026, 8, 10, 9), closedAt: at(2026, 8, 10, 9), duration: 3000},
-		{fileId: "b", filePath: "论文/B.md", openedAt: at(2026, 8, 10, 18), closedAt: at(2026, 8, 10, 18), duration: 5000}
+		session("a-1", "a", "课程/A.md", at(2026, 8, 9, 9), 1000),
+		session("a-2", "a", "课程/A.md", at(2026, 8, 10, 9), 3000),
+		session("b-1", "b", "论文/B.md", at(2026, 8, 10, 18), 5000)
 	];
 	const daily = [
 		{date: "2026-8-9", totalTime: 1000, sessionCount: 1, noteCount: 1},

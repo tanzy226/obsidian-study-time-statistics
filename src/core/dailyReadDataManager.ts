@@ -19,10 +19,7 @@ export class DailyReadDataManager {
 	}
 
 	public async saveSession(session: StudySession): Promise<void> {
-		const date = TimeUtils.getDateFromTimestamp(session.openedAt);
-		const existingData = await this.loadDailyData(date);
-		existingData.sessions.push(session);
-		await this.dataManager.setDailyReadData(date, existingData);
+		await this.dataManager.recordCompletedSession(session);
 	}
 
 	public async listDates(): Promise<string[]> {

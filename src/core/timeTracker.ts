@@ -8,13 +8,7 @@ import {StatusBarFactory} from "../view/display/statusBar/statusBarFactory";
 import {DailyReadDataManager} from "./dailyReadDataManager";
 import StudyTimeStatisticsPlugin from "../main";
 import {Context} from "../context/context";
-
-interface ActiveSession {
-	fileId: string;
-	filePath: string;
-	openedAt: number;
-	duration: number;
-}
+import {createSessionId} from "../util/sessionUtils";
 
 export class TimeTracker {
 	private readonly app: App;
@@ -24,7 +18,7 @@ export class TimeTracker {
 	private readonly globalRefreshTime = 1000 * 6;
 	private windowFocus = true;
 	private lastRefreshAt = Date.now();
-	private currentSession: ActiveSession | null = null;
+	private currentSession: StudySession | null = null;
 	private operationQueue: Promise<void> = Promise.resolve();
 
 	constructor(plugin: StudyTimeStatisticsPlugin, app: App, dataManager: PluginDataManager, dailyReadDataManager: DailyReadDataManager) {
@@ -76,11 +70,17 @@ export class TimeTracker {
 			Context.setCurrentFile(activeFile);
 			if (activeFile) {
 				const record = await this.incTotalReadCount(activeFile);
+				const openedAt = Date.now();
 				this.currentSession = {
+					id: createSessionId(openedAt),
 					fileId: record.fileId,
 					filePath: activeFile.path,
-					openedAt: Date.now(),
-					duration: 0
+					openedAt,
+					closedAt: openedAt,
+					duration: 0,
+					source: "automatic",
+					createdAt: openedAt,
+					updatedAt: openedAt
 				};
 			}
 			this.lastRefreshAt = Date.now();
@@ -179,9 +179,11 @@ export class TimeTracker {
 
 	private async finishCurrentSession() {
 		if (!this.currentSession) return;
+		const closedAt = Date.now();
 		const session: StudySession = {
 			...this.currentSession,
-			closedAt: Date.now()
+			closedAt,
+			updatedAt: closedAt
 		};
 		this.currentSession = null;
 		await this.dailyReadDataManager.saveSession(session);

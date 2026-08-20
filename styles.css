@@ -238,6 +238,57 @@
 	font-weight: bold;
 }
 
+/* Session history and data correction */
+.session-history-view {
+	padding: 4px 2px 24px;
+}
+
+.session-history-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 8px;
+}
+
+.session-history-header h2 {
+	margin: 0 0 6px;
+}
+
+.session-history-header p,
+.session-backup-note {
+	color: var(--text-muted);
+}
+
+.session-history-actions,
+.session-row-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.session-history-actions {
+	justify-content: flex-end;
+}
+
+.session-history-table td {
+	vertical-align: middle;
+}
+
+.session-row-actions button {
+	padding: 4px 9px;
+}
+
+@media (width <= 700px) {
+	.session-history-header {
+		flex-direction: column;
+	}
+
+	.session-history-actions {
+		justify-content: flex-start;
+	}
+}
+
 .view-mode-selector {
 	display: flex;
 	justify-content: center;
