@@ -2,7 +2,7 @@ import * as React from "react";
 import {Notice} from "obsidian";
 import StudyTimeStatisticsPlugin from "../../main";
 import {ReadingProgressEntry} from "../../interface/readingProgress";
-import {NoteProgressSummary, summarizeNoteProgress} from "../../util/readingProgressUtils";
+import {NoteProgressSummary, readingCharacters, summarizeNoteProgress, summarizeReadingIntake} from "../../util/readingProgressUtils";
 import {TimeUtils} from "../../util/timeUtils";
 import I18n from "../../language/i18n";
 import {ConfirmActionModal} from "../display/modal/sessionEditorModal";
@@ -71,6 +71,7 @@ export function ReadingProgressView({plugin, onSelect}: Props) {
 	</div>;
 
 	const notes = summarizeNoteProgress(entries).sort((a, b) => b.coverage - a.coverage);
+	const intake = summarizeReadingIntake(entries);
 	const totalCharacters = notes.reduce((sum, note) => sum + note.characterCount, 0);
 	const weightedCoverage = totalCharacters > 0
 		? notes.reduce((sum, note) => sum + note.characterCount * note.coverage, 0) / totalCharacters
@@ -114,6 +115,14 @@ export function ReadingProgressView({plugin, onSelect}: Props) {
 			<Summary label={I18n.t("estimatedCoveredCharacters")} value={String(Math.round(totalCovered))} />
 			<Summary label={I18n.t("progressActiveTime")} value={TimeUtils.getPreciseFormattedReadingTime(totalDuration)} />
 			<Summary label={I18n.t("readingPace")} value={formatSpeed(overallSpeed)} />
+			<Summary label={I18n.t("totalCharactersRead")} value={Math.round(intake.totalCharacters).toLocaleString()} />
+			<Summary label={I18n.t("uniqueCharactersReached")} value={Math.round(intake.uniqueCharacters).toLocaleString()} />
+			<Summary label={I18n.t("repeatedReadingCharacters")} value={Math.round(intake.repeatedCharacters).toLocaleString()} />
+			<Summary label={I18n.t("equivalentFullPasses")} value={intake.equivalentPasses.toFixed(2)} />
+			<Summary label={I18n.t("timePerThousandCharacters")} value={intake.secondsPerThousandCharacters > 0 ? I18n.t("seconds", {second: Math.round(intake.secondsPerThousandCharacters)}) : I18n.t("notAvailable")} />
+			<Summary label={I18n.t("notesAtEndPosition")} value={I18n.t("notesCount", {count: intake.notesAtEnd})} />
+			<Summary label={I18n.t("manualCharacterEntries")} value={I18n.t("times", {count: intake.manualEntryCount})} />
+			<Summary label={I18n.t("estimatedCharacterEntries")} value={I18n.t("times", {count: intake.estimatedEntryCount})} />
 		</div>
 		<Section title={I18n.t("coverageHeatmap")} subtitle={I18n.t("coverageHeatmapDesc")}>
 			<ProgressHeatmap points={heatmap} />
@@ -125,7 +134,7 @@ export function ReadingProgressView({plugin, onSelect}: Props) {
 			<Section title={I18n.t("noteCoverageRanking")} subtitle={I18n.t("noteCoverageRankingDesc")}>
 				<ol className="progress-ranking">{notes.slice(0, 20).map(note => <li key={note.filePath}>
 					<button title={note.filePath} onClick={() => onSelect(note.filePath)}>{shortName(note.filePath)}</button>
-					<span>{formatPercent(note.coverage)} · {formatSpeed(note.charactersPerMinute)}</span>
+					<span>{formatPercent(note.coverage)}{note.currentPosition !== undefined ? ` · ${I18n.t("currentPositionShort", {percent: Math.round(note.currentPosition * 10) / 10})}` : ""} · {Math.round(note.totalReadCharacters).toLocaleString()} · {formatSpeed(note.charactersPerMinute)}</span>
 				</li>)}</ol>
 			</Section>
 			<Section title={I18n.t("folderCoverage")} subtitle={I18n.t("folderCoverageDesc")}>
@@ -136,11 +145,12 @@ export function ReadingProgressView({plugin, onSelect}: Props) {
 		</div>
 		<Section title={I18n.t("progressHistory")} subtitle={I18n.t("progressHistoryDesc")}>
 			{entries.length === 0 ? <p className="leaderboard-no-data">{I18n.t("noProgressEntries")}</p> :
-				<div className="study-table-scroll"><table className="study-table"><thead><tr><th>{I18n.t("time")}</th><th>{I18n.t("note")}</th><th>{I18n.t("coverage")}</th><th>{I18n.t("progressActiveTime")}</th><th>{I18n.t("readingPace")}</th><th>{I18n.t("actions")}</th></tr></thead><tbody>
+				<div className="study-table-scroll"><table className="study-table"><thead><tr><th>{I18n.t("time")}</th><th>{I18n.t("note")}</th><th>{I18n.t("coverage")}</th><th>{I18n.t("readingPosition")}</th><th>{I18n.t("charactersRead")}</th><th>{I18n.t("measurementType")}</th><th>{I18n.t("progressActiveTime")}</th><th>{I18n.t("readingPace")}</th><th>{I18n.t("actions")}</th></tr></thead><tbody>
 					{entries.slice(0, 500).map(entry => {
-						const covered = entry.characterCount * entry.percent / 100;
+						const covered = readingCharacters(entry);
 						const speed = entry.activeDuration > 0 ? covered / (entry.activeDuration / 60_000) : 0;
-						return <tr key={entry.id}><td>{new Date(entry.recordedAt).toLocaleString()}</td><td><button className="study-note-button" title={entry.filePath} onClick={() => onSelect(entry.filePath)}>{shortName(entry.filePath)}</button></td><td>{formatPercent(entry.percent)}</td><td>{TimeUtils.getPreciseFormattedReadingTime(entry.activeDuration)}</td><td>{formatSpeed(speed)}</td><td><div className="session-row-actions"><button onClick={() => openEditor(entry)}>{I18n.t("edit")}</button><button onClick={() => deleteEntry(entry)}>{I18n.t("delete")}</button></div></td></tr>;
+						const position = entry.startPosition === undefined && entry.endPosition === undefined ? I18n.t("notAvailable") : `${entry.startPosition ?? "?"}% → ${entry.endPosition ?? "?"}%`;
+						return <tr key={entry.id}><td>{new Date(entry.recordedAt).toLocaleString()}</td><td><button className="study-note-button" title={entry.filePath} onClick={() => onSelect(entry.filePath)}>{shortName(entry.filePath)}</button></td><td>{formatPercent(entry.percent)}</td><td>{position}</td><td>{Math.round(covered).toLocaleString()}</td><td>{I18n.t(entry.measurement === "manual" ? "measurementManual" : "measurementEstimated")}</td><td>{TimeUtils.getPreciseFormattedReadingTime(entry.activeDuration)}</td><td>{formatSpeed(speed)}</td><td><div className="session-row-actions"><button onClick={() => openEditor(entry)}>{I18n.t("edit")}</button><button onClick={() => deleteEntry(entry)}>{I18n.t("delete")}</button></div></td></tr>;
 					})}
 				</tbody></table></div>}
 		</Section>

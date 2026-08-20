@@ -56,6 +56,8 @@ export class NoteStatsBarManager {
 			if (this.dataManager.getProgressTrackingEnabled()) {
 				const progress = summarizeNoteProgress(this.dataManager.getProgressEntries(view.file.path))[0];
 				this.addMetric(bar, I18n.t("inlineCoverage"), `${Math.round((progress?.coverage ?? 0) * 10) / 10}%`);
+				if (progress?.currentPosition !== undefined) this.addMetric(bar, I18n.t("inlineReadingPosition"), `${Math.round(progress.currentPosition * 10) / 10}%`);
+				this.addMetric(bar, I18n.t("inlineCharactersRead"), Math.round(progress?.totalReadCharacters ?? 0).toLocaleString());
 				const button = bar.createEl("button", {cls: "study-time-statistics-note-bar-action", text: I18n.t("recordProgress")});
 				button.addEventListener("click", () => {
 					new ProgressEntryModal(this.app, this.plugin, undefined, view.file?.path, () => this.render()).open();

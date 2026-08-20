@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0 — 2026-09-16
+
+- Added optional start and end positions for each reading, with the latest end position shown as current reading progress.
+- Added manual characters-read input and clearly labeled estimates when the field is left blank.
+- Added total, unique-estimated, and repeated-reading characters, equivalent full passes, time per 1,000 characters, and notes reaching the end.
+- Added per-entry character provenance, reading-position history, note-top current position, and cumulative characters read.
+- Migrated all earlier coverage entries conservatively as estimated measurements through data version 5.
+
 ## 2.0.0 — 2026-09-09
 
 - Added a redesigned Study Cockpit as the default dashboard home.

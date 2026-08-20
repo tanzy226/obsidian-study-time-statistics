@@ -5,7 +5,7 @@ import {createLegacySessionId, createSessionId, isStudySessionSource} from "../u
 import {ReadingProgressEntry, ReadingProgressInput} from "../interface/readingProgress";
 import {clampPercent, createProgressId} from "../util/readingProgressUtils";
 
-export const CURRENT_DATA_VERSION = 4;
+export const CURRENT_DATA_VERSION = 5;
 
 export interface DailyReadData {
 	dailyReadData: Record<string, ReadRecord>;
@@ -98,14 +98,23 @@ function parseProgressEntry(value: unknown): ReadingProgressEntry | undefined {
 	if (!source || typeof source.fileId !== "string" || typeof source.filePath !== "string") return undefined;
 	const recordedAt = Math.max(0, finiteNumber(source.recordedAt));
 	if (!recordedAt) return undefined;
+	const percent = clampPercent(finiteNumber(source.percent));
+	const characterCount = Math.max(0, finiteNumber(source.characterCount));
+	const startPosition = typeof source.startPosition === "number" && Number.isFinite(source.startPosition) ? clampPercent(source.startPosition) : undefined;
+	const endPosition = typeof source.endPosition === "number" && Number.isFinite(source.endPosition) ? clampPercent(source.endPosition) : undefined;
+	const hasManualCharacters = typeof source.readCharacters === "number" && Number.isFinite(source.readCharacters);
 	return {
 		id: typeof source.id === "string" && source.id ? source.id : createProgressId(recordedAt),
 		fileId: source.fileId,
 		filePath: source.filePath,
-		percent: clampPercent(finiteNumber(source.percent)),
+		percent,
 		recordedAt,
-		characterCount: Math.max(0, finiteNumber(source.characterCount)),
+		characterCount,
 		activeDuration: Math.max(0, finiteNumber(source.activeDuration)),
+		...(startPosition !== undefined ? {startPosition} : {}),
+		...(endPosition !== undefined ? {endPosition} : {}),
+		readCharacters: hasManualCharacters ? Math.max(0, finiteNumber(source.readCharacters)) : characterCount * percent / 100,
+		measurement: source.measurement === "manual" && hasManualCharacters ? "manual" : "estimated",
 		createdAt: Math.max(0, finiteNumber(source.createdAt, recordedAt)),
 		updatedAt: Math.max(0, finiteNumber(source.updatedAt, recordedAt))
 	};
@@ -278,6 +287,10 @@ export class PluginDataManager {
 			percent: clampPercent(input.percent),
 			characterCount: Math.max(0, input.characterCount),
 			activeDuration: Math.max(0, input.activeDuration),
+			...(input.startPosition !== undefined ? {startPosition: clampPercent(input.startPosition)} : {}),
+			...(input.endPosition !== undefined ? {endPosition: clampPercent(input.endPosition)} : {}),
+			readCharacters: Math.max(0, input.readCharacters ?? input.characterCount * clampPercent(input.percent) / 100),
+			measurement: input.measurement ?? (input.readCharacters === undefined ? "estimated" : "manual"),
 			createdAt: now,
 			updatedAt: now
 		};
@@ -296,6 +309,10 @@ export class PluginDataManager {
 				percent: clampPercent(input.percent),
 				characterCount: Math.max(0, input.characterCount),
 				activeDuration: Math.max(0, input.activeDuration),
+				...(input.startPosition !== undefined ? {startPosition: clampPercent(input.startPosition)} : {startPosition: undefined}),
+				...(input.endPosition !== undefined ? {endPosition: clampPercent(input.endPosition)} : {endPosition: undefined}),
+				readCharacters: Math.max(0, input.readCharacters ?? input.characterCount * clampPercent(input.percent) / 100),
+				measurement: input.measurement ?? (input.readCharacters === undefined ? "estimated" : "manual"),
 				updatedAt: Date.now()
 			};
 			data.progressEntries[index] = updated;

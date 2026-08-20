@@ -6,6 +6,10 @@ export interface ReadingProgressEntry {
 	recordedAt: number;
 	characterCount: number;
 	activeDuration: number;
+	startPosition?: number;
+	endPosition?: number;
+	readCharacters: number;
+	measurement: "manual" | "estimated";
 	createdAt: number;
 	updatedAt: number;
 }
@@ -17,4 +21,8 @@ export interface ReadingProgressInput {
 	recordedAt: number;
 	characterCount: number;
 	activeDuration: number;
+	startPosition?: number;
+	endPosition?: number;
+	readCharacters?: number;
+	measurement?: "manual" | "estimated";
 }
