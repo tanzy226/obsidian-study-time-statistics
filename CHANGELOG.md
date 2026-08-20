@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0 — 2026-09-09
+
+- Added a redesigned Study Cockpit as the default dashboard home.
+- Combined today and weekly reading, goal progress, week-over-week change, median session length, deep-reading share, verified-study share, and the highest-investment hour.
+- Added a local revisit suggestion queue for notes not opened in seven days; suggestions never claim forgetting or mastery.
+- Added compact goal and data pulses so incomplete or ambiguous records are visible without removing them.
+
 ## 1.3.0 — 2026-09-02
 
 - Added private daily and weekly study targets with 28-day completion trends and goal streaks.

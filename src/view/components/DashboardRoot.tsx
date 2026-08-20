@@ -8,12 +8,13 @@ import { StudyAnalyticsView } from "./StudyAnalyticsView";
 import {SessionHistoryView} from "./SessionHistoryView";
 import {ReadingProgressView} from "./ReadingProgressView";
 import {StudyGoalsView} from "./StudyGoalsView";
+import {StudyCockpitView} from "./StudyCockpitView";
 
-type ViewType = 'leaderboard' | 'statistics' | 'studyAnalytics' | 'sessions' | 'progress' | 'goals';
+type ViewType = 'cockpit' | 'leaderboard' | 'statistics' | 'studyAnalytics' | 'sessions' | 'progress' | 'goals';
 
 export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSelect: (filePath: string) => void }) {
     const { plugin, onSelect } = props;
-    const [viewType, setViewType] = React.useState<ViewType>('statistics');
+    const [viewType, setViewType] = React.useState<ViewType>('cockpit');
     const [sidebarOpen, setSidebarOpen] = React.useState(false);
     const overlayRef = React.useRef<HTMLDivElement>(null);
     const toggleIconRef = React.useRef<HTMLSpanElement>(null);
@@ -70,6 +71,12 @@ export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSele
             ></div>
             <div className={`study-time-statistics-sidebar ${sidebarOpen ? 'open' : ''}`}>
                 <h2 className="sidebar-title">{I18n.t('focusTimeTitle')}</h2>
+				<SidebarButton
+					icon="layout-dashboard"
+					label={I18n.t('studyCockpit')}
+					active={viewType === 'cockpit'}
+					onClick={() => handleViewChange('cockpit')}
+				/>
                 <SidebarButton 
                     icon="bar-chart-3" 
                     label={I18n.t('statistics')} 
@@ -109,6 +116,7 @@ export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSele
             </div>
             
             <div className="study-time-statistics-content">
+				{viewType === 'cockpit' && <StudyCockpitView plugin={plugin} onSelect={onSelect} />}
                 {viewType === 'statistics' && <StatisticsView plugin={plugin} onSelect={onSelect} />}
                 {viewType === 'leaderboard' && <LeaderboardView plugin={plugin} onSelect={onSelect} />}
                 {viewType === 'studyAnalytics' && <StudyAnalyticsView plugin={plugin} onSelect={onSelect} />}
