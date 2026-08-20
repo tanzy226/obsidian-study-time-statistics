@@ -3,6 +3,7 @@ import StudyTimeStatisticsPlugin from "../../main";
 import {NoteStudyRow, StudyAnalyticsResult} from "../../core/studyAnalytics";
 import {TimeUtils} from "../../util/timeUtils";
 import I18n from "../../language/i18n";
+import {compactDateLabel} from "../../util/chartUtils";
 
 interface Props {
 	plugin: StudyTimeStatisticsPlugin;
@@ -88,10 +89,10 @@ export function StudyAnalyticsView({plugin, onSelect}: Props) {
 
 			<div className="study-two-column">
 				<Section title={I18n.t("last30ReadingTime")} subtitle={I18n.t("reviewTimeEquivalent")}>
-					<SimpleBars labelStep={5} items={last30.map(point => ({label: point.date.slice(5), value: point.totalTime, title: `${point.date} · ${TimeUtils.getPreciseFormattedReadingTime(point.totalTime)}`}))} />
+					<SimpleBars labelStep={5} items={last30.map(point => ({label: compactDateLabel(point.date), value: point.totalTime, title: `${point.date} · ${TimeUtils.getPreciseFormattedReadingTime(point.totalTime)}`}))} />
 				</Section>
 				<Section title={I18n.t("last30Sessions")} subtitle={I18n.t("reviewsEquivalent")}>
-					<SimpleBars labelStep={5} items={last30.map(point => ({label: point.date.slice(5), value: point.sessionCount, title: `${point.date} · ${I18n.t("times", {count: point.sessionCount})}`}))} />
+					<SimpleBars labelStep={5} items={last30.map(point => ({label: compactDateLabel(point.date), value: point.sessionCount, title: `${point.date} · ${I18n.t("times", {count: point.sessionCount})}`}))} />
 				</Section>
 			</div>
 
