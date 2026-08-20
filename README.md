@@ -21,7 +21,7 @@ Study Time Statistics is a privacy-first Obsidian plugin that measures how you s
 - Optionally record self-reported **reading coverage** for each visit. Coverage describes how much content you reached—not how much you understood, remembered, or mastered.
 - Explore per-note and folder coverage, a 365-day coverage heatmap, hourly patterns, estimated covered characters, and character-based reading pace.
 - Set private daily and weekly study targets, follow a 28-day goal trend, and review ambiguous long sessions without automatic deletion.
-- Start from a Study Cockpit that combines goals, week-over-week change, session quality, high-investment hours, and a conservative revisit queue.
+- Start from a Study Overview that combines goals, week-over-week change, session quality, high-investment hours, and a conservative revisit queue.
 - Classify new sessions from local interaction signals as interactive, quiet study, needs review, or unclassified. Ambiguous sessions are never silently discarded.
 - Rank notes by most opens, longest total reading time, longest average visit, longest single session, and most active days.
 - Pause tracking when Obsidian is not focused by enabling Strict mode.
@@ -103,7 +103,7 @@ The codebase is derived from [AstraDev's open-source Obsidian time tracker](http
 
 Study Time Statistics（学习时间统计）是一款本地隐私优先的 Obsidian 插件，用来统计 Markdown 笔记和 PDF 的有效阅读时间、打开次数、平均每次阅读、最长单次阅读、活跃天数和连续学习天数。每篇笔记顶部的统计条属于界面层，会随正文滚动消失，不会写入或修改 Markdown 原文。
 
-仪表盘提供日、周、月、年和全部时间范围，并包含 365 天热力图、近 30 天趋势、时段与星期分布、会话时长分布、文件夹汇总、最近会话，以及按打开次数、累计阅读、平均阅读、最长单次和活跃天数排列的榜单。1.1.0 可以新增、修改和删除会话，并创建或恢复本地备份；1.2.0 新增默认关闭的“阅读覆盖度”；1.3.0 新增学习目标与会话复核；2.0.0 新增默认打开的学习驾驶舱、周环比、会话质量和建议回看。覆盖度不代表吸收、理解、记忆或掌握程度。
+仪表盘提供日、周、月、年和全部时间范围，并包含 365 天热力图、近 30 天趋势、时段与星期分布、会话时长分布、文件夹汇总、最近会话，以及按打开次数、累计阅读、平均阅读、最长单次和活跃天数排列的榜单。1.1.0 可以新增、修改和删除会话，并创建或恢复本地备份；1.2.0 新增默认关闭的“阅读覆盖度”；1.3.0 新增学习目标与会话复核；2.0.0 新增默认打开的学习总览、周环比、会话质量和建议回看。覆盖度不代表吸收、理解、记忆或掌握程度。
 
 上方图片和表格使用插件在 2026-08-10 保存的真实统计快照：共 **2 篇笔记、4 次打开、累计 2 分 44 秒**。公开材料仅保留统计数值，真实笔记标题、路径、文件夹和正文均已删除，并统一替换为“Note A / Note B”。
 
