@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0 — 2026-08-26
+
+- Added optional, self-reported Reading Coverage without presenting it as absorption, understanding, memory, or mastery.
+- Added per-reading coverage entries with correction and deletion, capped cumulative note coverage, and character-count snapshots.
+- Added note and folder coverage summaries, a 365-day coverage heatmap, hourly coverage patterns, estimated covered characters, and character-based reading pace.
+- Added a note-top coverage metric and quick recording action that remain outside the Markdown source and scroll with the note.
+- Added local activity signals for new sessions: interactive, quiet study, needs review, and unclassified. Ambiguous sessions remain recorded for user review.
+- Kept Reading Coverage disabled by default and preserved 1.1 data through a version 3 migration.
+
 ## 1.1.0 — 2026-08-20
 
 - Added a searchable session-history workspace with manual session creation, editing, and deletion.

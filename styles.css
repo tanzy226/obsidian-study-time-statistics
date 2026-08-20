@@ -849,6 +849,56 @@
 	white-space: nowrap;
 }
 
+.study-time-statistics-note-bar-action {
+	align-self: center;
+	font-size: var(--font-ui-smaller);
+	margin-inline-start: auto;
+	padding: 2px 8px;
+}
+
+.reading-progress-view,
+.progress-disabled {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.progress-disabled {
+	align-items: flex-start;
+	max-width: 680px;
+}
+
+.progress-ranking {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 0;
+	padding-inline-start: 28px;
+}
+
+.progress-ranking li {
+	align-items: center;
+	display: grid;
+	gap: 12px;
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.progress-ranking button {
+	background: transparent;
+	box-shadow: none;
+	justify-content: flex-start;
+	overflow: hidden;
+	padding: 0;
+	text-align: start;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.progress-ranking span {
+	color: var(--text-muted);
+	font-variant-numeric: tabular-nums;
+}
+
 .study-time-statistics-note-bar-label {
 	color: var(--text-normal);
 	font-weight: 600;
