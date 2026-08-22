@@ -9,8 +9,9 @@ import {SessionHistoryView} from "./SessionHistoryView";
 import {ReadingProgressView} from "./ReadingProgressView";
 import {StudyGoalsView} from "./StudyGoalsView";
 import {StudyCockpitView} from "./StudyCockpitView";
+import {FeedbackView} from "./FeedbackView";
 
-type ViewType = 'cockpit' | 'leaderboard' | 'statistics' | 'studyAnalytics' | 'sessions' | 'progress' | 'goals';
+type ViewType = 'cockpit' | 'leaderboard' | 'statistics' | 'studyAnalytics' | 'sessions' | 'progress' | 'goals' | 'feedback';
 
 export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSelect: (filePath: string) => void }) {
     const { plugin, onSelect } = props;
@@ -113,6 +114,12 @@ export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSele
                     active={viewType === 'leaderboard'} 
                     onClick={() => handleViewChange('leaderboard')} 
                 />
+                <SidebarButton
+                    icon="message-square-heart"
+                    label={I18n.t('feedback')}
+                    active={viewType === 'feedback'}
+                    onClick={() => handleViewChange('feedback')}
+                />
             </div>
             
             <div className="study-time-statistics-content">
@@ -123,6 +130,7 @@ export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSele
                 {viewType === 'sessions' && <SessionHistoryView plugin={plugin} onSelect={onSelect} />}
                 {viewType === 'progress' && <ReadingProgressView plugin={plugin} onSelect={onSelect} />}
 				{viewType === 'goals' && <StudyGoalsView plugin={plugin} onSelect={onSelect} />}
+                {viewType === 'feedback' && <FeedbackView plugin={plugin} />}
             </div>
         </div>
     );

@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Replaced clipped month/day labels in the 30-day charts with a clear relative 1–30 axis; exact calendar dates remain available in each bar's tooltip.
+- Added a bilingual in-plugin feedback center for bug reports, inaccurate statistics, feature requests, and discussions.
+- Kept feedback privacy-preserving: buttons only open GitHub forms, and the plugin never submits study data automatically.
 
 ## 2.1.0 — 2026-09-16
 
