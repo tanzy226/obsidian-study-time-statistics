@@ -67,6 +67,8 @@ Study Time Statistics 是一款注重隐私的 Obsidian 学习时间统计插件
 
 ## 反馈与支持
 
+仪表盘内置“反馈与建议”页面，可分别打开错误报告、统计不准确、功能建议或讨论页面。插件不会自动提交学习数据；只有用户在 GitHub 表单中主动确认提交的内容才会发送。
+
 - [报告错误](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=bug_report.yml)
 - [报告统计不准确](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=data_accuracy.yml)
 - [提交功能建议](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=feature_request.yml)

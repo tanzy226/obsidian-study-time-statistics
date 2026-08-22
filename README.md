@@ -69,6 +69,8 @@ The plugin does not implement or require a separate cloud service. If your whole
 
 ## Feedback and support
 
+The dashboard includes a **Feedback** page that opens the appropriate GitHub form for bugs, inaccurate statistics, feature requests, or discussions. The plugin never submits study data automatically; nothing is sent until the user explicitly submits a GitHub form.
+
 - [Report a bug](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=bug_report.yml)
 - [Report inaccurate statistics](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=data_accuracy.yml)
 - [Suggest a feature](https://github.com/tanzy226/obsidian-study-time-statistics/issues/new?template=feature_request.yml)
