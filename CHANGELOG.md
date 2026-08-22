@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added a bilingual in-plugin feedback center for bug reports, inaccurate statistics, feature requests, and discussions.
+- Kept feedback privacy-preserving: buttons only open GitHub forms, and the plugin never submits study data automatically.
+
 ## 1.2.0 — 2026-08-26
 
 - Added optional, self-reported Reading Coverage without presenting it as absorption, understanding, memory, or mastery.
