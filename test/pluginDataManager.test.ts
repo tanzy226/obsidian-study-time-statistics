@@ -171,6 +171,47 @@ test("invalid imports are rejected without replacing current data", async () => 
 	assert.equal(manager.getReadRecord("A.md")?.duration, 4_000);
 });
 
+test("1.1 data migrates with optional reading coverage disabled", async () => {
+	const {manager} = createManager({
+		dataVersion: 2,
+		readData: {},
+		dailyData: {},
+		settings: {strictMode: true}
+	});
+	await manager.loadData();
+	assert.equal(manager.getProgressTrackingEnabled(), false);
+	assert.deepEqual(manager.getProgressEntries(), []);
+});
+
+test("reading coverage entries can be created, edited, filtered, and deleted", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	await manager.setProgressTrackingEnabled(true);
+	const created = await manager.createProgressEntry({
+		fileId: "a",
+		filePath: "A.md",
+		percent: 12.5,
+		recordedAt: 1_000,
+		characterCount: 2_000,
+		activeDuration: 60_000
+	});
+	assert.equal(manager.getProgressTrackingEnabled(), true);
+	assert.equal(manager.getProgressEntries("A.md")[0]?.percent, 12.5);
+
+	await manager.updateProgressEntry(created.id, {
+		fileId: "a",
+		filePath: "A.md",
+		percent: 150,
+		recordedAt: 2_000,
+		characterCount: 2_100,
+		activeDuration: 90_000
+	});
+	assert.equal(manager.getProgressEntries()[0]?.percent, 100);
+	assert.equal(manager.getProgressEntries()[0]?.characterCount, 2_100);
+	assert.equal(await manager.deleteProgressEntry(created.id), true);
+	assert.deepEqual(manager.getProgressEntries(), []);
+});
+
 test("migrates a large legacy session history without losing or duplicating records", async () => {
 	const sessions = Array.from({length: 10_000}, (_, index) => ({
 		fileId: `note-${index % 100}`,

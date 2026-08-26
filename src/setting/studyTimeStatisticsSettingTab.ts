@@ -3,6 +3,7 @@ import StudyTimeStatisticsPlugin from "../main";
 import I18n from "../language/i18n";
 
 const STRICT_MODE_KEY = "strictMode";
+const PROGRESS_TRACKING_KEY = "progressTrackingEnabled";
 
 export class StudyTimeStatisticsSettingTab extends PluginSettingTab {
 	constructor(app: App, private readonly plugin: StudyTimeStatisticsPlugin) {
@@ -18,16 +19,29 @@ export class StudyTimeStatisticsSettingTab extends PluginSettingTab {
 				key: STRICT_MODE_KEY,
 				defaultValue: true
 			}
+		}, {
+			name: I18n.t("progressTracking"),
+			desc: I18n.t("progressTrackingDesc"),
+			control: {
+				type: "toggle",
+				key: PROGRESS_TRACKING_KEY,
+				defaultValue: false
+			}
 		}];
 	}
 
 	getControlValue(key: string): unknown {
-		return key === STRICT_MODE_KEY ? this.plugin.dataManager.getStrictMode() : undefined;
+		if (key === STRICT_MODE_KEY) return this.plugin.dataManager.getStrictMode();
+		if (key === PROGRESS_TRACKING_KEY) return this.plugin.dataManager.getProgressTrackingEnabled();
+		return undefined;
 	}
 
 	async setControlValue(key: string, value: unknown): Promise<void> {
 		if (key === STRICT_MODE_KEY && typeof value === "boolean") {
 			await this.plugin.dataManager.setStrictMode(value);
+		}
+		if (key === PROGRESS_TRACKING_KEY && typeof value === "boolean") {
+			await this.plugin.dataManager.setProgressTrackingEnabled(value);
 		}
 	}
 }

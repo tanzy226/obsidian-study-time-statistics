@@ -2,8 +2,10 @@ import type {Plugin} from "obsidian";
 import {ReadRecord} from "../interface/readRecord";
 import {StudySession} from "../interface/studySession";
 import {createLegacySessionId, createSessionId, isStudySessionSource} from "../util/sessionUtils";
+import {ReadingProgressEntry, ReadingProgressInput} from "../interface/readingProgress";
+import {clampPercent, createProgressId} from "../util/readingProgressUtils";
 
-export const CURRENT_DATA_VERSION = 2;
+export const CURRENT_DATA_VERSION = 3;
 
 export interface DailyReadData {
 	dailyReadData: Record<string, ReadRecord>;
@@ -14,8 +16,10 @@ interface PluginData {
 	dataVersion: number;
 	readData: Record<string, ReadRecord>;
 	dailyData: Record<string, DailyReadData>;
+	progressEntries: ReadingProgressEntry[];
 	settings: {
 		strictMode?: boolean;
+		progressTrackingEnabled?: boolean;
 	};
 }
 
@@ -27,7 +31,7 @@ export interface ManualSessionInput {
 }
 
 function emptyPluginData(): PluginData {
-	return {dataVersion: CURRENT_DATA_VERSION, readData: {}, dailyData: {}, settings: {}};
+	return {dataVersion: CURRENT_DATA_VERSION, readData: {}, dailyData: {}, progressEntries: [], settings: {}};
 }
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
@@ -71,12 +75,37 @@ function parseStudySession(value: unknown): StudySession | undefined {
 	const closedAt = Math.max(openedAt, finiteNumber(source.closedAt, openedAt));
 	const duration = Math.max(0, finiteNumber(source.duration));
 	const base = {fileId: source.fileId, filePath: source.filePath, openedAt, closedAt, duration};
+	const engagement = source.engagement;
 	return {
 		...base,
 		id: typeof source.id === "string" && source.id ? source.id : createLegacySessionId(base),
 		source: isStudySessionSource(source.source) ? source.source : "automatic",
 		createdAt: Math.max(0, finiteNumber(source.createdAt, openedAt)),
-		updatedAt: Math.max(0, finiteNumber(source.updatedAt, closedAt || openedAt))
+		updatedAt: Math.max(0, finiteNumber(source.updatedAt, closedAt || openedAt)),
+		interactionCount: Math.max(0, finiteNumber(source.interactionCount)),
+		...(typeof source.firstInteractionAt === "number" ? {firstInteractionAt: Math.max(0, source.firstInteractionAt)} : {}),
+		...(typeof source.lastInteractionAt === "number" ? {lastInteractionAt: Math.max(0, source.lastInteractionAt)} : {}),
+		...(engagement === "interactive" || engagement === "quiet-study" || engagement === "uncertain" || engagement === "unclassified"
+			? {engagement}
+			: {engagement: "unclassified" as const})
+	};
+}
+
+function parseProgressEntry(value: unknown): ReadingProgressEntry | undefined {
+	const source = asObject(value);
+	if (!source || typeof source.fileId !== "string" || typeof source.filePath !== "string") return undefined;
+	const recordedAt = Math.max(0, finiteNumber(source.recordedAt));
+	if (!recordedAt) return undefined;
+	return {
+		id: typeof source.id === "string" && source.id ? source.id : createProgressId(recordedAt),
+		fileId: source.fileId,
+		filePath: source.filePath,
+		percent: clampPercent(finiteNumber(source.percent)),
+		recordedAt,
+		characterCount: Math.max(0, finiteNumber(source.characterCount)),
+		activeDuration: Math.max(0, finiteNumber(source.activeDuration)),
+		createdAt: Math.max(0, finiteNumber(source.createdAt, recordedAt)),
+		updatedAt: Math.max(0, finiteNumber(source.updatedAt, recordedAt))
 	};
 }
 
@@ -114,11 +143,19 @@ function parsePluginData(value: unknown): PluginData {
 	}
 	const rawSettings = asObject(source.settings);
 	const strictMode = rawSettings?.strictMode;
+	const progressTrackingEnabled = rawSettings?.progressTrackingEnabled;
+	const rawProgressEntries = source.progressEntries;
 	return {
 		dataVersion: CURRENT_DATA_VERSION,
 		readData: parseReadData(source.readData),
 		dailyData,
-		settings: typeof strictMode === "boolean" ? {strictMode} : {}
+		progressEntries: Array.isArray(rawProgressEntries)
+			? rawProgressEntries.map(parseProgressEntry).filter((entry): entry is ReadingProgressEntry => entry !== undefined)
+			: [],
+		settings: {
+			...(typeof strictMode === "boolean" ? {strictMode} : {}),
+			...(typeof progressTrackingEnabled === "boolean" ? {progressTrackingEnabled} : {})
+		}
 	};
 }
 
@@ -196,6 +233,62 @@ export class PluginDataManager {
 
 	public async setStrictMode(value: boolean): Promise<void> {
 		await this.mutate(data => { data.settings.strictMode = value; });
+	}
+
+	public getProgressTrackingEnabled(): boolean {
+		return this.data.settings.progressTrackingEnabled ?? false;
+	}
+
+	public async setProgressTrackingEnabled(value: boolean): Promise<void> {
+		await this.mutate(data => { data.settings.progressTrackingEnabled = value; });
+	}
+
+	public getProgressEntries(filePath?: string): ReadingProgressEntry[] {
+		return this.data.progressEntries
+			.filter(entry => filePath === undefined || entry.filePath === filePath)
+			.sort((a, b) => b.recordedAt - a.recordedAt)
+			.map(entry => ({...entry}));
+	}
+
+	public async createProgressEntry(input: ReadingProgressInput): Promise<ReadingProgressEntry> {
+		const now = Date.now();
+		const entry: ReadingProgressEntry = {
+			...input,
+			id: createProgressId(input.recordedAt),
+			percent: clampPercent(input.percent),
+			characterCount: Math.max(0, input.characterCount),
+			activeDuration: Math.max(0, input.activeDuration),
+			createdAt: now,
+			updatedAt: now
+		};
+		await this.mutate(data => { data.progressEntries.push(entry); });
+		return {...entry};
+	}
+
+	public async updateProgressEntry(id: string, input: ReadingProgressInput): Promise<ReadingProgressEntry | undefined> {
+		return this.mutate(data => {
+			const index = data.progressEntries.findIndex(entry => entry.id === id);
+			const existing = data.progressEntries[index];
+			if (!existing) return undefined;
+			const updated: ReadingProgressEntry = {
+				...existing,
+				...input,
+				percent: clampPercent(input.percent),
+				characterCount: Math.max(0, input.characterCount),
+				activeDuration: Math.max(0, input.activeDuration),
+				updatedAt: Date.now()
+			};
+			data.progressEntries[index] = updated;
+			return {...updated};
+		});
+	}
+
+	public async deleteProgressEntry(id: string): Promise<boolean> {
+		return this.mutate(data => {
+			const originalLength = data.progressEntries.length;
+			data.progressEntries = data.progressEntries.filter(entry => entry.id !== id);
+			return data.progressEntries.length !== originalLength;
+		});
 	}
 
 	public getSessions(): StudySession[] {
@@ -285,6 +378,7 @@ export class PluginDataManager {
 			data.dataVersion = parsed.dataVersion;
 			data.readData = parsed.readData;
 			data.dailyData = parsed.dailyData;
+			data.progressEntries = parsed.progressEntries;
 			data.settings = parsed.settings;
 		});
 	}

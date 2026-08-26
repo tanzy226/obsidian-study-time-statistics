@@ -9,6 +9,7 @@ import {DailyReadDataManager} from "./dailyReadDataManager";
 import StudyTimeStatisticsPlugin from "../main";
 import {Context} from "../context/context";
 import {createSessionId} from "../util/sessionUtils";
+import {classifySessionEngagement} from "../util/activityClassifier";
 
 export class TimeTracker {
 	private readonly app: App;
@@ -20,6 +21,7 @@ export class TimeTracker {
 	private lastRefreshAt = Date.now();
 	private currentSession: StudySession | null = null;
 	private operationQueue: Promise<void> = Promise.resolve();
+	private lastInteractionRecordedAt = 0;
 
 	constructor(plugin: StudyTimeStatisticsPlugin, app: App, dataManager: PluginDataManager, dailyReadDataManager: DailyReadDataManager) {
 		this.app = app;
@@ -32,6 +34,9 @@ export class TimeTracker {
 		plugin.registerInterval(window.setInterval(() => { this.handleRefresh(); }, this.globalRefreshTime));
 		plugin.registerDomEvent(window, "focus", () => this.handleWindowFocus());
 		plugin.registerDomEvent(window, "blur", () => this.handleWindowBlur());
+		plugin.registerDomEvent(document, "keydown", () => this.recordInteraction());
+		plugin.registerDomEvent(document, "pointerdown", () => this.recordInteraction());
+		plugin.registerDomEvent(document, "scroll", () => this.recordInteraction(), true);
 		this.app.workspace.onLayoutReady(() => { void this.handleFileChange(); });
 	}
 
@@ -80,12 +85,29 @@ export class TimeTracker {
 					duration: 0,
 					source: "automatic",
 					createdAt: openedAt,
-					updatedAt: openedAt
+					updatedAt: openedAt,
+					interactionCount: 0,
+					engagement: "unclassified"
 				};
 			}
 			this.lastRefreshAt = Date.now();
 			this.updateStatusBar();
 		});
+	}
+
+	private recordInteraction(): void {
+		const now = Date.now();
+		if (!this.currentSession || !this.windowFocus || now - this.lastInteractionRecordedAt < 1_000) return;
+		this.lastInteractionRecordedAt = now;
+		this.currentSession.interactionCount = (this.currentSession.interactionCount ?? 0) + 1;
+		this.currentSession.firstInteractionAt ??= now;
+		this.currentSession.lastInteractionAt = now;
+	}
+
+	public getCurrentSessionDuration(filePath: string): number {
+		if (!this.currentSession || this.currentSession.filePath !== filePath) return 0;
+		const pending = this.needSuspendTimer() ? 0 : Math.min(Math.max(Date.now() - this.lastRefreshAt, 0), this.globalRefreshTime * 2.5);
+		return this.currentSession.duration + pending;
 	}
 
 	private handleWindowFocus() {
@@ -183,7 +205,8 @@ export class TimeTracker {
 		const session: StudySession = {
 			...this.currentSession,
 			closedAt,
-			updatedAt: closedAt
+			updatedAt: closedAt,
+			engagement: classifySessionEngagement(this.currentSession)
 		};
 		this.currentSession = null;
 		await this.dailyReadDataManager.saveSession(session);

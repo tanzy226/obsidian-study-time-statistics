@@ -4,6 +4,8 @@ import {PluginDataManager} from "../../../core/pluginDataManager";
 import {TimeUtils} from "../../../util/timeUtils";
 import I18n from "../../../language/i18n";
 import {NoteStudyRow} from "../../../core/studyAnalytics";
+import {summarizeNoteProgress} from "../../../util/readingProgressUtils";
+import {ProgressEntryModal} from "../modal/progressEntryModal";
 
 export class NoteStatsBarManager {
 	private readonly app: App;
@@ -18,7 +20,7 @@ export class NoteStatsBarManager {
 		plugin.registerEvent(app.workspace.on("layout-change", () => { this.render(); }));
 		plugin.registerEvent(app.workspace.on("file-open", () => { this.render(); }));
 		plugin.registerEvent(app.workspace.on("active-leaf-change", () => { this.render(); }));
-		plugin.registerInterval(window.setInterval(() => this.render(), 1000));
+		plugin.registerInterval(window.setInterval(() => this.render(), 6000));
 		plugin.registerInterval(window.setInterval(() => { void this.refreshExtendedStats(); }, 15000));
 		app.workspace.onLayoutReady(() => {
 			this.render();
@@ -51,6 +53,14 @@ export class NoteStatsBarManager {
 			this.addMetric(bar, I18n.t("inlineActiveDays"), I18n.t("days", {count: extended?.activeDays || 0}));
 			this.addMetric(bar, I18n.t("inlineCurrentStreak"), I18n.t("days", {count: extended?.currentStreak || 0}));
 			this.addMetric(bar, I18n.t("inlineLastRead"), this.formatLastRead(extended?.lastReadAt || record?.lastOpenedAt || 0));
+			if (this.dataManager.getProgressTrackingEnabled()) {
+				const progress = summarizeNoteProgress(this.dataManager.getProgressEntries(view.file.path))[0];
+				this.addMetric(bar, I18n.t("inlineCoverage"), `${Math.round((progress?.coverage ?? 0) * 10) / 10}%`);
+				const button = bar.createEl("button", {cls: "study-time-statistics-note-bar-action", text: I18n.t("recordProgress")});
+				button.addEventListener("click", () => {
+					new ProgressEntryModal(this.app, this.plugin, undefined, view.file?.path, () => this.render()).open();
+				});
+			}
 		}
 	}
 

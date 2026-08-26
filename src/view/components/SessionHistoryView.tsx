@@ -21,6 +21,15 @@ function formatDateTime(timestamp: number): string {
 	});
 }
 
+function engagementLabel(session: StudySession): string {
+	switch (session.engagement) {
+		case "interactive": return I18n.t("engagementInteractive");
+		case "quiet-study": return I18n.t("engagementQuietStudy");
+		case "uncertain": return I18n.t("engagementUncertain");
+		default: return I18n.t("engagementUnclassified");
+	}
+}
+
 export function SessionHistoryView({plugin, onSelect}: Props) {
 	const [sessions, setSessions] = React.useState<StudySession[]>([]);
 	const [loading, setLoading] = React.useState(true);
@@ -93,12 +102,13 @@ export function SessionHistoryView({plugin, onSelect}: Props) {
 		<p className="session-backup-note">{I18n.t("backupCount", {count: backupCount})} · {I18n.t("backupPrivacyNote")}</p>
 		{sessions.length === 0 ? <p className="leaderboard-no-data">{I18n.t("noSessions")}</p> :
 			<div className="study-table-scroll"><table className="study-table session-history-table">
-				<thead><tr><th>{I18n.t("time")}</th><th>{I18n.t("note")}</th><th>{I18n.t("duration")}</th><th>{I18n.t("sessionSource")}</th><th>{I18n.t("actions")}</th></tr></thead>
+				<thead><tr><th>{I18n.t("time")}</th><th>{I18n.t("note")}</th><th>{I18n.t("duration")}</th><th>{I18n.t("sessionSource")}</th><th>{I18n.t("engagement")}</th><th>{I18n.t("actions")}</th></tr></thead>
 				<tbody>{sessions.slice(0, 500).map(session => <tr key={session.id}>
 					<td>{formatDateTime(session.openedAt)}</td>
 					<td><button className="study-note-button" title={session.filePath} onClick={() => onSelect(session.filePath)}>{shortName(session.filePath)}</button></td>
 					<td>{TimeUtils.getPreciseFormattedReadingTime(session.duration)}</td>
 					<td>{I18n.t(session.source === "manual" ? "manualSession" : "automaticSession")}</td>
+					<td>{engagementLabel(session)}</td>
 					<td><div className="session-row-actions"><button onClick={() => openEditor(session)}>{I18n.t("edit")}</button><button onClick={() => deleteSession(session)}>{I18n.t("delete")}</button></div></td>
 				</tr>)}</tbody>
 			</table></div>}

@@ -3,6 +3,7 @@ import {DashboardModal} from "../view/display/modal/dashboardModal";
 import StudyTimeStatisticsPlugin from "../main";
 import I18n from "../language/i18n";
 import {ConfirmActionModal, SessionEditorModal} from "../view/display/modal/sessionEditorModal";
+import {ProgressEntryModal} from "../view/display/modal/progressEntryModal";
 export class CommandFactory {
 
 	private plugin: StudyTimeStatisticsPlugin;
@@ -21,6 +22,17 @@ export class CommandFactory {
 			name: I18n.t('openDashboard'),
 			callback: () => {
 				new DashboardModal(this.plugin, this.app).open();
+			}
+		});
+
+		this.plugin.addCommand({
+			id: "record-reading-coverage",
+			name: I18n.t("recordProgress"),
+			checkCallback: checking => {
+				const file = this.app.workspace.getActiveFile();
+				if (!this.plugin.dataManager.getProgressTrackingEnabled() || !file || !["md", "pdf"].includes(file.extension.toLowerCase())) return false;
+				if (!checking) new ProgressEntryModal(this.app, this.plugin, undefined, file.path, () => undefined).open();
+				return true;
 			}
 		});
 

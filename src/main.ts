@@ -33,6 +33,10 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 		return this._backupService;
 	}
 
+	getCurrentSessionDuration(filePath: string): number {
+		return this.timeTracker?.getCurrentSessionDuration(filePath) ?? 0;
+	}
+
 	private timeTracker?: TimeTracker;
 	private _dataManager!: PluginDataManager;
 	private dailyReadDataManager!: DailyReadDataManager;
