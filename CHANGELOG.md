@@ -13,6 +13,7 @@
 - Added a data-quality review queue for long low-interaction sessions classified as needing review.
 - Added one-click confirmation of quiet study or interactive reading without silently deleting ambiguous time.
 - Preserved all 1.2 data through a version 4 migration with conservative default goals.
+- Updated transitive development dependencies to clear the release security audit.
 
 ## 1.2.0 — 2026-08-26
 
