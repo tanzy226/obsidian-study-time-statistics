@@ -6,6 +6,13 @@
 - Added a bilingual in-plugin feedback center for bug reports, inaccurate statistics, feature requests, and discussions.
 - Kept feedback privacy-preserving: buttons only open GitHub forms, and the plugin never submits study data automatically.
 
+## 1.3.1 — 2026-09-03
+
+- Removed periodic full-history analytics recomputation while the statistics panel is closed.
+- Made extended analytics lazy, revision-cached, and automatically refreshed only while the analytics view is open and relevant data changes.
+- Added an explicit refresh action and reduced a full analysis from repeated storage loads to a single snapshot load.
+- Kept the independent six-second automatic reading-time tracker unchanged.
+
 ## 1.3.0 — 2026-09-02
 
 - Made yearly, 30-day, and 24-hour charts denser, prevented date-label overlap, and automatically positioned scrollable charts at the newest data on the right.

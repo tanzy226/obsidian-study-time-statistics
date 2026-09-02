@@ -70,7 +70,7 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 		this.timeTracker = new TimeTracker(this, this.app, this._dataManager, this.dailyReadDataManager);
 		this._dataAnalyzer = new DataAnalyzer(this, this.app, this._dataManager);
 		this._focusDataAggregator = new FocusDataAggregator(this.app, this._dataManager, this.dailyReadDataManager);
-		this._studyAnalyticsService = new StudyAnalyticsService(this.app, this._dataManager, this.dailyReadDataManager);
+		this._studyAnalyticsService = new StudyAnalyticsService(this.app, this._dataManager);
 		this._backupService = new DataBackupService(this.app, this._dataManager);
 		this.noteStatsBarManager = new NoteStatsBarManager(this, this.app, this._dataManager);
 		this.addSettingTab(new StudyTimeStatisticsSettingTab(this.app, this));
