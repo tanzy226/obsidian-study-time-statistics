@@ -2,8 +2,18 @@
 
 ## Unreleased
 
+- Replaced clipped month/day labels in the 30-day charts with a clear relative 1–30 axis; exact calendar dates remain available in each bar's tooltip.
 - Added a bilingual in-plugin feedback center for bug reports, inaccurate statistics, feature requests, and discussions.
 - Kept feedback privacy-preserving: buttons only open GitHub forms, and the plugin never submits study data automatically.
+
+## 1.3.0 — 2026-09-02
+
+- Made yearly, 30-day, and 24-hour charts denser, prevented date-label overlap, and automatically positioned scrollable charts at the newest data on the right.
+- Added private daily and weekly study targets with 28-day completion trends and goal streaks.
+- Added a data-quality review queue for long low-interaction sessions classified as needing review.
+- Added one-click confirmation of quiet study or interactive reading without silently deleting ambiguous time.
+- Preserved all 1.2 data through a version 4 migration with conservative default goals.
+- Updated transitive development dependencies to clear the release security audit.
 
 ## 1.2.0 — 2026-08-26
 
