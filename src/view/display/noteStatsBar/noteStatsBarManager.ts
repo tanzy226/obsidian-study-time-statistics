@@ -18,14 +18,18 @@ export class NoteStatsBarManager {
 		this.dataManager = dataManager;
 		this.plugin = plugin;
 		plugin.registerEvent(app.workspace.on("layout-change", () => { this.render(); }));
-		plugin.registerEvent(app.workspace.on("file-open", () => { this.render(); }));
-		plugin.registerEvent(app.workspace.on("active-leaf-change", () => { this.render(); }));
+		plugin.registerEvent(app.workspace.on("file-open", () => { void this.refreshForVisibleNotes(); }));
+		plugin.registerEvent(app.workspace.on("active-leaf-change", () => { void this.refreshForVisibleNotes(); }));
 		plugin.registerInterval(window.setInterval(() => this.render(), 6000));
-		plugin.registerInterval(window.setInterval(() => { void this.refreshExtendedStats(); }, 15000));
 		app.workspace.onLayoutReady(() => {
 			this.render();
 			void this.refreshExtendedStats();
 		});
+	}
+
+	private async refreshForVisibleNotes(): Promise<void> {
+		this.render();
+		await this.refreshExtendedStats();
 	}
 
 	public render() {
