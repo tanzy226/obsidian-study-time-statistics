@@ -65,6 +65,8 @@
 	"inlineCoverage": "Coverage",
 	"analyticsLoading": "Preparing study statistics…",
 	"analyticsLoadError": "Unable to load statistics. Please reopen the dashboard.",
+	"refreshAnalytics": "Refresh now",
+	"analyticsRefreshing": "Refreshing…",
 	"studyOverview": "Study analytics overview",
 	"studyOverviewDesc": "An Anki-inspired view of note-reading behavior, without mastery, forgetting, or card-difficulty estimates.",
 	"todayReading": "Today’s reading",

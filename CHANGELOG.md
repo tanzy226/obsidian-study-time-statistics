@@ -8,6 +8,7 @@
 
 ## 2.1.0 — 2026-09-16
 
+- Removed periodic full-history analytics while the panel is closed; added lazy revision caching, open-view data refreshes, and an explicit refresh action.
 - Kept yearly, 30-day, and 24-hour charts compact and automatically aligned to the newest data on the right.
 - Added optional start and end positions for each reading, with the latest end position shown as current reading progress.
 - Added manual characters-read input and clearly labeled estimates when the field is left blank.

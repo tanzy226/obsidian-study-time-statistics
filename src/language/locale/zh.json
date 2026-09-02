@@ -65,6 +65,8 @@
 	"inlineCoverage": "累计覆盖",
 	"analyticsLoading": "正在整理学习统计…",
 	"analyticsLoadError": "统计数据加载失败，请重新打开仪表盘。",
+	"refreshAnalytics": "立即刷新",
+	"analyticsRefreshing": "正在刷新…",
 	"studyOverview": "学习分析总览",
 	"studyOverviewDesc": "借鉴 Anki 的统计结构，按笔记阅读行为统计；不包含掌握度、遗忘率或卡片难度。",
 	"todayReading": "今日阅读",

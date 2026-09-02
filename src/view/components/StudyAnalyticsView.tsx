@@ -27,31 +27,46 @@ function formatDateTime(timestamp: number) {
 export function StudyAnalyticsView({plugin, onSelect}: Props) {
 	const [data, setData] = React.useState<StudyAnalyticsResult | null>(null);
 	const [loading, setLoading] = React.useState(true);
+	const [refreshing, setRefreshing] = React.useState(false);
 	const [error, setError] = React.useState("");
+	const aliveRef = React.useRef(false);
 
-	React.useEffect(() => {
-		let alive = true;
-		const load = async () => {
-			try {
-				const result = await plugin.studyAnalyticsService.analyze();
-				if (alive) setData(result);
-			} catch (reason) {
-				console.error("Failed to load study analytics", reason);
-				if (alive) setError(I18n.t("analyticsLoadError"));
-			} finally {
-				if (alive) setLoading(false);
+	const load = React.useCallback(async (force = false) => {
+		if (force) setRefreshing(true);
+		try {
+			const result = await plugin.studyAnalyticsService.analyze(force);
+			if (aliveRef.current) {
+				setData(result);
+				setError("");
 			}
-		};
-		void load();
-		const timer = window.setInterval(() => { void load(); }, 15000);
-		return () => {
-			alive = false;
-			window.clearInterval(timer);
-		};
+		} catch (reason) {
+			console.error("Failed to load study analytics", reason);
+			if (aliveRef.current) setError(I18n.t("analyticsLoadError"));
+		} finally {
+			if (aliveRef.current) {
+				setLoading(false);
+				setRefreshing(false);
+			}
+		}
 	}, [plugin]);
 
+	React.useEffect(() => {
+		aliveRef.current = true;
+		let refreshTimer: number | undefined;
+		void load();
+		const unsubscribe = plugin.dataManager.onDidChange(() => {
+			if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+			refreshTimer = window.setTimeout(() => { void load(); }, 750);
+		});
+		return () => {
+			aliveRef.current = false;
+			unsubscribe();
+			if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+		};
+	}, [plugin, load]);
+
 	if (loading) return <div className="stats-loading">{I18n.t("analyticsLoading")}</div>;
-	if (error) return <div className="stats-no-data">{error}</div>;
+	if (error && !data) return <div className="stats-no-data">{error}<br /><button onClick={() => { void load(true); }}>{I18n.t("refreshAnalytics")}</button></div>;
 	if (!data) return null;
 
 	const summary = data.summary;
@@ -68,8 +83,10 @@ export function StudyAnalyticsView({plugin, onSelect}: Props) {
 	return (
 		<div className="study-analytics-view">
 			<div className="study-analytics-header">
-				<h2>{I18n.t("studyOverview")}</h2>
-				<p>{I18n.t("studyOverviewDesc")}</p>
+				<div><h2>{I18n.t("studyOverview")}</h2><p>{I18n.t("studyOverviewDesc")}</p>{error && <p className="study-analytics-refresh-error">{error}</p>}</div>
+				<button disabled={refreshing} onClick={() => { void load(true); }}>
+					{refreshing ? I18n.t("analyticsRefreshing") : I18n.t("refreshAnalytics")}
+				</button>
 			</div>
 
 			<div className="study-summary-grid">

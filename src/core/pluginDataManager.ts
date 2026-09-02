@@ -177,6 +177,8 @@ function parsePluginData(value: unknown): PluginData {
 export class PluginDataManager {
 	private data: PluginData = emptyPluginData();
 	private mutationQueue: Promise<void> = Promise.resolve();
+	private revision = 0;
+	private readonly changeListeners = new Set<() => void>();
 
 	constructor(private readonly plugin: Plugin) {}
 
@@ -199,10 +201,27 @@ export class PluginDataManager {
 			await this.loadUnlocked();
 			const result = await operation(this.data);
 			await this.saveUnlocked();
+			this.revision += 1;
+			for (const listener of this.changeListeners) {
+				try {
+					listener();
+				} catch (error) {
+					console.error("Study Time Statistics data-change listener failed", error);
+				}
+			}
 			return result;
 		});
 		this.mutationQueue = task.then(() => undefined, () => undefined);
 		return task;
+	}
+
+	public getRevision(): number {
+		return this.revision;
+	}
+
+	public onDidChange(listener: () => void): () => void {
+		this.changeListeners.add(listener);
+		return () => { this.changeListeners.delete(listener); };
 	}
 
 	public getReadRecord(filePath: string): ReadRecord | undefined {

@@ -1086,6 +1086,21 @@
 	padding-bottom: 20px;
 }
 
+.study-analytics-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.study-analytics-header button {
+	flex: 0 0 auto;
+}
+
+.study-analytics-refresh-error {
+	color: var(--text-error);
+}
+
 .study-analytics-header h2 {
 	margin: 0 0 4px;
 }
