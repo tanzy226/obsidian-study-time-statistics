@@ -14,12 +14,21 @@
 - Added a local revisit suggestion queue for notes not opened in seven days; suggestions never claim forgetting or mastery.
 - Added compact goal and data pulses so incomplete or ambiguous records are visible without removing them.
 
+## 1.3.1 — 2026-09-03
+
+- Removed periodic full-history analytics recomputation while the statistics panel is closed.
+- Made extended analytics lazy, revision-cached, and automatically refreshed only while the analytics view is open and relevant data changes.
+- Added an explicit refresh action and reduced a full analysis from repeated storage loads to a single snapshot load.
+- Kept the independent six-second automatic reading-time tracker unchanged.
+
 ## 1.3.0 — 2026-09-02
 
+- Made yearly, 30-day, and 24-hour charts denser, prevented date-label overlap, and automatically positioned scrollable charts at the newest data on the right.
 - Added private daily and weekly study targets with 28-day completion trends and goal streaks.
 - Added a data-quality review queue for long low-interaction sessions classified as needing review.
 - Added one-click confirmation of quiet study or interactive reading without silently deleting ambiguous time.
 - Preserved all 1.2 data through a version 4 migration with conservative default goals.
+- Updated transitive development dependencies to clear the release security audit.
 
 ## 1.2.0 — 2026-08-26
 
