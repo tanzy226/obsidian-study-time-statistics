@@ -6,6 +6,14 @@
 - Added a bilingual in-plugin feedback center for bug reports, inaccurate statistics, feature requests, and discussions.
 - Kept feedback privacy-preserving: buttons only open GitHub forms, and the plugin never submits study data automatically.
 
+## 2.0.0 — 2026-09-09
+
+- Made yearly, 30-day, and 24-hour charts denser, prevented date-label overlap, and automatically positioned scrollable charts at the newest data on the right.
+- Added a redesigned Study Overview as the default dashboard home.
+- Combined today and weekly reading, goal progress, week-over-week change, median session length, deep-reading share, verified-study share, and the highest-investment hour.
+- Added a local revisit suggestion queue for notes not opened in seven days; suggestions never claim forgetting or mastery.
+- Added compact goal and data pulses so incomplete or ambiguous records are visible without removing them.
+
 ## 1.3.1 — 2026-09-03
 
 - Removed periodic full-history analytics recomputation while the statistics panel is closed.

@@ -376,6 +376,89 @@
 	}
 }
 
+.cockpit-hero {
+	display: flex;
+	justify-content: space-between;
+	gap: 20px;
+	align-items: center;
+	padding: 22px;
+	margin-bottom: 16px;
+	border-radius: var(--radius-l);
+	background: linear-gradient(135deg, color-mix(in srgb, var(--interactive-accent) 24%, var(--background-primary)), var(--background-secondary));
+}
+
+.cockpit-hero h2,
+.cockpit-hero p {
+	margin: 4px 0;
+}
+
+.cockpit-eyebrow {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-accent);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+}
+
+.cockpit-today {
+	display: grid;
+	text-align: right;
+	white-space: nowrap;
+}
+
+.cockpit-today strong {
+	font-size: 1.7em;
+}
+
+.study-summary-card small {
+	color: var(--text-faint);
+}
+
+.cockpit-progress,
+.cockpit-progress label {
+	display: grid;
+	gap: 8px;
+}
+
+.cockpit-progress {
+	gap: 14px;
+}
+
+.cockpit-progress progress {
+	width: 100%;
+	accent-color: var(--interactive-accent);
+}
+
+.cockpit-pulse-list {
+	display: grid;
+	gap: 10px;
+}
+
+.cockpit-pulse-row {
+	display: flex;
+	justify-content: space-between;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.cockpit-revisit-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+	gap: 8px;
+}
+
+.cockpit-revisit-grid button {
+	display: grid;
+	gap: 4px;
+	text-align: left;
+	height: auto;
+	padding: 10px;
+}
+
+.cockpit-revisit-meta {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
 .view-mode-selector {
 	display: flex;
 	justify-content: center;
