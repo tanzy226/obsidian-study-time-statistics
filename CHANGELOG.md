@@ -6,6 +6,16 @@
 - Added a bilingual in-plugin feedback center for bug reports, inaccurate statistics, feature requests, and discussions.
 - Kept feedback privacy-preserving: buttons only open GitHub forms, and the plugin never submits study data automatically.
 
+## 2.1.0 — 2026-09-16
+
+- Removed periodic full-history analytics while the panel is closed; added lazy revision caching, open-view data refreshes, and an explicit refresh action.
+- Kept yearly, 30-day, and 24-hour charts compact and automatically aligned to the newest data on the right.
+- Added optional start and end positions for each reading, with the latest end position shown as current reading progress.
+- Added manual characters-read input and clearly labeled estimates when the field is left blank.
+- Added total, unique-estimated, and repeated-reading characters, equivalent full passes, time per 1,000 characters, and notes reaching the end.
+- Added per-entry character provenance, reading-position history, note-top current position, and cumulative characters read.
+- Migrated all earlier coverage entries conservatively as estimated measurements through data version 5.
+
 ## 2.0.0 — 2026-09-09
 
 - Made yearly, 30-day, and 24-hour charts denser, prevented date-label overlap, and automatically positioned scrollable charts at the newest data on the right.

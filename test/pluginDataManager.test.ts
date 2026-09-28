@@ -216,8 +216,24 @@ test("reading coverage entries can be created, edited, filtered, and deleted", a
 	});
 	assert.equal(manager.getProgressEntries()[0]?.percent, 100);
 	assert.equal(manager.getProgressEntries()[0]?.characterCount, 2_100);
+	assert.equal(manager.getProgressEntries()[0]?.measurement, "estimated");
 	assert.equal(await manager.deleteProgressEntry(created.id), true);
 	assert.deepEqual(manager.getProgressEntries(), []);
+});
+
+test("2.0 progress data migrates to estimated characters and accepts manual reading positions", async () => {
+	const {manager} = createManager({
+		dataVersion: 4,
+		readData: {}, dailyData: {}, settings: {},
+		progressEntries: [{id: "old", fileId: "a", filePath: "A.md", percent: 25, recordedAt: 1000, characterCount: 2000, activeDuration: 60_000, createdAt: 1000, updatedAt: 1000}]
+	});
+	await manager.loadData();
+	assert.equal(manager.getProgressEntries()[0]?.readCharacters, 500);
+	assert.equal(manager.getProgressEntries()[0]?.measurement, "estimated");
+	const created = await manager.createProgressEntry({fileId: "a", filePath: "A.md", percent: 10, recordedAt: 2000, characterCount: 2000, activeDuration: 30_000, startPosition: 25, endPosition: 35, readCharacters: 260, measurement: "manual"});
+	assert.equal(created.endPosition, 35);
+	assert.equal(created.readCharacters, 260);
+	assert.equal(created.measurement, "manual");
 });
 
 test("migrates a large legacy session history without losing or duplicating records", async () => {

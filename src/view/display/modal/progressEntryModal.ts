@@ -36,6 +36,9 @@ export class ProgressEntryModal extends Modal {
 		let filePath = this.entry?.filePath ?? this.filePathOverride ?? activePath;
 		let recordedAtText = toLocalDateTimeInput(this.entry?.recordedAt ?? Date.now());
 		let percentText = String(this.entry?.percent ?? 0);
+		let startPositionText = this.entry?.startPosition === undefined ? "" : String(this.entry.startPosition);
+		let endPositionText = this.entry?.endPosition === undefined ? "" : String(this.entry.endPosition);
+		let readCharactersText = this.entry?.measurement === "manual" ? String(this.entry.readCharacters) : "";
 		const initialDuration = this.entry?.activeDuration ?? this.plugin.getCurrentSessionDuration(filePath);
 		let activeDurationText = durationInput(initialDuration);
 
@@ -64,24 +67,63 @@ export class ProgressEntryModal extends Modal {
 			.setName(I18n.t("progressActiveDuration"))
 			.setDesc(I18n.t("progressActiveDurationDesc"))
 			.addText(text => text.setValue(activeDurationText).onChange(value => { activeDurationText = value; }));
+		new Setting(this.contentEl)
+			.setName(I18n.t("readingStartPosition"))
+			.setDesc(I18n.t("readingPositionDesc"))
+			.addText(text => {
+				text.inputEl.type = "number";
+				text.inputEl.min = "0";
+				text.inputEl.max = "100";
+				text.inputEl.step = "0.1";
+				text.setValue(startPositionText).onChange(value => { startPositionText = value; });
+			});
+		new Setting(this.contentEl)
+			.setName(I18n.t("readingEndPosition"))
+			.setDesc(I18n.t("readingEndPositionDesc"))
+			.addText(text => {
+				text.inputEl.type = "number";
+				text.inputEl.min = "0";
+				text.inputEl.max = "100";
+				text.inputEl.step = "0.1";
+				text.setValue(endPositionText).onChange(value => { endPositionText = value; });
+			});
+		new Setting(this.contentEl)
+			.setName(I18n.t("charactersReadThisTime"))
+			.setDesc(I18n.t("charactersReadThisTimeDesc"))
+			.addText(text => {
+				text.inputEl.type = "number";
+				text.inputEl.min = "0";
+				text.inputEl.step = "1";
+				text.setValue(readCharactersText).onChange(value => { readCharactersText = value; });
+			});
 		new Setting(this.contentEl).addButton(button => button
 			.setCta()
 			.setButtonText(I18n.t("save"))
-			.onClick(() => { void this.save(filePath, recordedAtText, percentText, activeDurationText); }));
+			.onClick(() => { void this.save(filePath, recordedAtText, percentText, activeDurationText, startPositionText, endPositionText, readCharactersText); }));
 	}
 
-	private async save(pathValue: string, recordedAtText: string, percentText: string, durationText: string): Promise<void> {
+	private async save(pathValue: string, recordedAtText: string, percentText: string, durationText: string, startText: string, endText: string, charactersText: string): Promise<void> {
 		const filePath = normalizePath(pathValue.trim());
 		const file = this.app.vault.getFileByPath(filePath);
 		const recordedAt = new Date(recordedAtText).getTime();
 		const percent = Number(percentText);
 		const activeDuration = parseDurationInput(durationText);
+		const startPosition = startText.trim() === "" ? undefined : Number(startText);
+		const endPosition = endText.trim() === "" ? undefined : Number(endText);
+		const readCharacters = charactersText.trim() === "" ? undefined : Number(charactersText);
 		if (!(file instanceof TFile) || !["md", "pdf"].includes(file.extension.toLowerCase())) {
 			new Notice(I18n.t("sessionInvalidNote"));
 			return;
 		}
 		if (!Number.isFinite(recordedAt) || !Number.isFinite(percent) || percent <= 0 || percent > 100 || activeDuration === undefined) {
 			new Notice(I18n.t("progressInvalid"));
+			return;
+		}
+		if ((startPosition !== undefined && (!Number.isFinite(startPosition) || startPosition < 0 || startPosition > 100)) ||
+			(endPosition !== undefined && (!Number.isFinite(endPosition) || endPosition < 0 || endPosition > 100)) ||
+			(startPosition !== undefined && endPosition !== undefined && startPosition > endPosition) ||
+			(readCharacters !== undefined && (!Number.isFinite(readCharacters) || readCharacters < 0))) {
+			new Notice(I18n.t("readingDetailsInvalid"));
 			return;
 		}
 		let characterCount = this.entry?.characterCount ?? 0;
@@ -95,7 +137,10 @@ export class ProgressEntryModal extends Modal {
 			percent,
 			recordedAt,
 			characterCount,
-			activeDuration
+			activeDuration,
+			...(startPosition !== undefined ? {startPosition} : {}),
+			...(endPosition !== undefined ? {endPosition} : {}),
+			...(readCharacters !== undefined ? {readCharacters, measurement: "manual" as const} : {measurement: "estimated" as const})
 		};
 		if (this.entry) await this.plugin.dataManager.updateProgressEntry(this.entry.id, input);
 		else await this.plugin.dataManager.createProgressEntry(input);
