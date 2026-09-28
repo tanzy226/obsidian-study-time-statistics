@@ -4,6 +4,25 @@
 	gap: 5px;
 }
 
+.data-health-summary,
+.data-health-issue {
+	padding: 12px;
+	margin-block: 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+}
+
+.data-health-issue,
+.data-health-actions {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+}
+
+.data-health-issue span {
+	overflow-wrap: anywhere;
+}
+
 .reading-time-text > span[aria-hidden] {
 	display: inline-flex;
 }

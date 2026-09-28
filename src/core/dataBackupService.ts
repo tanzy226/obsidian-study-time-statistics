@@ -52,7 +52,14 @@ export class DataBackupService {
 		const path = normalizePath(`${BACKUP_FOLDER}/${backupFileName(createdAt)}`);
 		await this.app.vault.create(path, JSON.stringify(document, null, 2));
 		this.lastSafetyBackupAt = createdAt;
+		await this.pruneBackups(20);
 		return path;
+	}
+
+	public async pruneBackups(maximum: number): Promise<number> {
+		const files = this.getBackupFiles().slice(Math.max(0, maximum));
+		for (const file of files) await this.app.fileManager.trashFile(file);
+		return files.length;
 	}
 
 	public async createSafetyBackup(): Promise<void> {

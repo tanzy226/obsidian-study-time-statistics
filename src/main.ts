@@ -1,4 +1,4 @@
-import {Plugin} from 'obsidian';
+import {Plugin, TFile} from 'obsidian';
 import {StudyTimeStatisticsSettingTab} from "./setting/studyTimeStatisticsSettingTab";
 import {CommandFactory} from "./command/commandFactory";
 import I18n from "./language/i18n";
@@ -75,6 +75,9 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 		this.noteStatsBarManager = new NoteStatsBarManager(this, this.app, this._dataManager);
 		this.addSettingTab(new StudyTimeStatisticsSettingTab(this.app, this));
 		RibbonFactory.createLeaderboardRibbon(this, this.app);
+		this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+			if (file instanceof TFile) void this._dataManager.renameFilePath(oldPath, file.path);
+		}));
 
 		// Init commands
 		const commandFactory = new CommandFactory(this, this.app);

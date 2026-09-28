@@ -4,8 +4,9 @@ import {StudySession} from "../interface/studySession";
 import {createLegacySessionId, createSessionId, isStudySessionSource} from "../util/sessionUtils";
 import {ReadingProgressEntry, ReadingProgressInput} from "../interface/readingProgress";
 import {clampPercent, createProgressId} from "../util/readingProgressUtils";
+import {repairSessions} from "../util/dataHealth";
 
-export const CURRENT_DATA_VERSION = 5;
+export const CURRENT_DATA_VERSION = 6;
 
 export interface DailyReadData {
 	dailyReadData: Record<string, ReadRecord>;
@@ -344,6 +345,41 @@ export class PluginDataManager {
 			const originalLength = data.progressEntries.length;
 			data.progressEntries = data.progressEntries.filter(entry => entry.id !== id);
 			return data.progressEntries.length !== originalLength;
+		});
+	}
+
+	public async renameFilePath(oldPath: string, newPath: string): Promise<void> {
+		if (!oldPath || !newPath || oldPath === newPath) return;
+		await this.mutate(data => {
+			const record = data.readData[oldPath];
+			if (record) {
+				delete data.readData[oldPath];
+				data.readData[newPath] = {...record, filePath: newPath};
+			}
+			for (const daily of Object.values(data.dailyData)) {
+				for (const session of daily.sessions) if (session.filePath === oldPath) session.filePath = newPath;
+				for (const dailyRecord of Object.values(daily.dailyReadData)) {
+					if (dailyRecord.filePath === oldPath) dailyRecord.filePath = newPath;
+				}
+			}
+			for (const entry of data.progressEntries) if (entry.filePath === oldPath) entry.filePath = newPath;
+		});
+	}
+
+	public async repairSessionData(): Promise<{removed: number}> {
+		return this.mutate(data => {
+			let removed = 0;
+			const seen = new Set<string>();
+			for (const daily of Object.values(data.dailyData)) {
+				const before = daily.sessions.length;
+				daily.sessions = repairSessions(daily.sessions).filter(session => {
+					if (seen.has(session.id)) return false;
+					seen.add(session.id);
+					return true;
+				});
+				removed += before - daily.sessions.length;
+			}
+			return {removed};
 		});
 	}
 
