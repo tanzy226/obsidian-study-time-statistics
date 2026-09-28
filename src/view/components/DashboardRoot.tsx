@@ -12,9 +12,10 @@ import {StudyCockpitView} from "./StudyCockpitView";
 import {FeedbackView} from "./FeedbackView";
 import {DataHealthView} from "./DataHealthView";
 import {AnalysisExplorerView} from "./AnalysisExplorerView";
+import {AttentionMapView} from "./AttentionMapView";
 
 type ViewType = 'overview' | 'analytics' | 'records' | 'more';
-type AnalyticsTab = 'summary' | 'trends' | 'filter' | 'ranking';
+type AnalyticsTab = 'summary' | 'trends' | 'filter' | 'investment' | 'ranking';
 type RecordsTab = 'sessions' | 'progress' | 'goals';
 type MoreTab = 'health' | 'feedback';
 
@@ -123,11 +124,13 @@ function AnalyticsHub({plugin, onSelect}: {plugin: StudyTimeStatisticsPlugin; on
 		{value: 'summary', label: I18n.t('analyticsSummary')},
 		{value: 'trends', label: I18n.t('analyticsTrends')},
 		{value: 'filter', label: I18n.t('analyticsFilter')},
+		{value: 'investment', label: I18n.t('analyticsInvestment')},
 		{value: 'ranking', label: I18n.t('leaderboard')}
 	]} />
 		{tab === 'summary' && <StudyAnalyticsView plugin={plugin} onSelect={onSelect} />}
 		{tab === 'trends' && <StatisticsView plugin={plugin} onSelect={onSelect} />}
 		{tab === 'filter' && <AnalysisExplorerView plugin={plugin} onSelect={onSelect} />}
+		{tab === 'investment' && <AttentionMapView plugin={plugin} onSelect={onSelect} />}
 		{tab === 'ranking' && <LeaderboardView plugin={plugin} onSelect={onSelect} />}
 	</>;
 }

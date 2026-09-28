@@ -37,6 +37,37 @@
 	font-size: var(--font-ui-small);
 }
 
+.attention-toolbar,
+.study-path-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: center;
+	margin-block: 12px;
+}
+
+.attention-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 10px;
+}
+
+.attention-node {
+	display: grid;
+	gap: 8px;
+	min-height: 92px;
+	padding: 14px;
+	border: 1px solid color-mix(in srgb, var(--interactive-accent) calc(25% + var(--attention-weight) * 45%), var(--background-modifier-border));
+	background: color-mix(in srgb, var(--interactive-accent) calc(4% + var(--attention-weight) * 18%), var(--background-primary));
+	text-align: left;
+}
+
+.attention-node span,
+.study-path-list {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
 .reading-time-text > span[aria-hidden] {
 	display: inline-flex;
 }
