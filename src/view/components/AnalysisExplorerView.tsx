@@ -33,7 +33,7 @@ export function AnalysisExplorerView({plugin, onSelect}: {plugin: StudyTimeStati
 
 	return <div className="analysis-explorer">
 		<h2>{text("Filter and compare", "筛选对比")}</h2>
-		<p className="setting-item-description">{text("Filter locally, compare the previous period, and open the underlying sessions.", "本地筛选、对比上一周期，并查看原始会话。")}</p>
+		<p className="setting-item-description">{text("Filter locally, compare the previous period, and inspect the underlying sessions.", "按日期、文件夹和笔记筛选，并与上一周期对比。")}</p>
 		<div className="analysis-filter-grid">
 			<label>{text("From", "开始")}<input type="date" value={start} onChange={event => setStart(event.target.value)} /></label>
 			<label>{text("To", "结束")}<input type="date" value={end} onChange={event => setEnd(event.target.value)} /></label>

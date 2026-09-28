@@ -396,17 +396,26 @@ export class PluginDataManager {
 		if (!oldPath || !newPath || oldPath === newPath) return;
 		await this.mutate(data => {
 			const record = data.readData[oldPath];
+			const changedAt = Date.now();
 			if (record) {
 				delete data.readData[oldPath];
 				data.readData[newPath] = {...record, filePath: newPath};
 			}
 			for (const daily of Object.values(data.dailyData)) {
-				for (const session of daily.sessions) if (session.filePath === oldPath) session.filePath = newPath;
+				for (const session of daily.sessions) if (session.filePath === oldPath) {
+					session.filePath = newPath;
+					session.updatedAt = changedAt;
+					this.appendEvent(data, "session", session.id, "upsert", session.fileId, session);
+				}
 				for (const dailyRecord of Object.values(daily.dailyReadData)) {
 					if (dailyRecord.filePath === oldPath) dailyRecord.filePath = newPath;
 				}
 			}
-			for (const entry of data.progressEntries) if (entry.filePath === oldPath) entry.filePath = newPath;
+			for (const entry of data.progressEntries) if (entry.filePath === oldPath) {
+				entry.filePath = newPath;
+				entry.updatedAt = changedAt;
+				this.appendEvent(data, "progress", entry.id, "upsert", entry.fileId, entry);
+			}
 			this.appendEvent(data, "note", record?.fileId ?? oldPath, "rename", record?.fileId, {oldPath, newPath});
 		});
 	}
@@ -511,6 +520,7 @@ export class PluginDataManager {
 			if (!session) return false;
 			session.engagement = engagement;
 			session.updatedAt = Date.now();
+			this.appendEvent(data, "session", session.id, "upsert", session.fileId, session);
 			return true;
 		});
 	}
@@ -532,6 +542,16 @@ export class PluginDataManager {
 			const originalSessions = Object.values(data.dailyData).reduce((sum, day) => sum + day.sessions.length, 0);
 			const originalProgress = data.progressEntries.length;
 			data.eventLog = mergeStudyEvents(data.eventLog, incoming.eventLog);
+			for (const [date, incomingDay] of Object.entries(incoming.dailyData)) {
+				const currentDay = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
+				for (const [fileId, incomingRecord] of Object.entries(incomingDay.dailyReadData)) {
+					const currentRecord = currentDay.dailyReadData[fileId];
+					currentDay.dailyReadData[fileId] = currentRecord
+						? {...currentRecord, duration: Math.max(currentRecord.duration, incomingRecord.duration), openCount: Math.max(currentRecord.openCount, incomingRecord.openCount)}
+						: {...incomingRecord};
+				}
+				data.dailyData[date] = currentDay;
+			}
 
 			const sessions = new Map<string, StudySession>();
 			for (const session of [...Object.values(data.dailyData).flatMap(day => day.sessions), ...Object.values(incoming.dailyData).flatMap(day => day.sessions)]) {
@@ -572,6 +592,41 @@ export class PluginDataManager {
 					const lastOpenedAt = Math.max(existing.lastOpenedAt ?? 0, record.lastOpenedAt ?? 0);
 					data.readData[path] = {...existing, duration: Math.max(existing.duration, record.duration), openCount: Math.max(existing.openCount, record.openCount), ...(firstOpenedAt.length ? {firstOpenedAt: Math.min(...firstOpenedAt)} : {}), ...(lastOpenedAt ? {lastOpenedAt} : {})};
 				}
+			}
+			const sessionTotals = new Map<string, {duration: number; count: number; fileId: string; first: number; last: number}>();
+			const dailySessionTotals = new Map<string, Map<string, {duration: number; count: number; filePath: string}>>();
+			for (const session of sessions.values()) {
+				const total = sessionTotals.get(session.filePath) ?? {duration: 0, count: 0, fileId: session.fileId, first: session.openedAt, last: session.openedAt};
+				total.duration += session.duration;
+				total.count += 1;
+				total.first = Math.min(total.first, session.openedAt);
+				total.last = Math.max(total.last, session.openedAt);
+				sessionTotals.set(session.filePath, total);
+				const date = dateKeyFromTimestamp(session.openedAt);
+				const dateTotals = dailySessionTotals.get(date) ?? new Map<string, {duration: number; count: number; filePath: string}>();
+				const dailyTotal = dateTotals.get(session.fileId) ?? {duration: 0, count: 0, filePath: session.filePath};
+				dailyTotal.duration += session.duration;
+				dailyTotal.count += 1;
+				dateTotals.set(session.fileId, dailyTotal);
+				dailySessionTotals.set(date, dateTotals);
+			}
+			for (const [path, total] of sessionTotals) {
+				const record = data.readData[path] ?? {fileId: total.fileId, filePath: path, duration: 0, openCount: 0};
+				record.duration = Math.max(record.duration, total.duration);
+				record.openCount = Math.max(record.openCount, total.count);
+				record.firstOpenedAt = Math.min(record.firstOpenedAt ?? total.first, total.first);
+				record.lastOpenedAt = Math.max(record.lastOpenedAt ?? total.last, total.last);
+				data.readData[path] = record;
+			}
+			for (const [date, totals] of dailySessionTotals) {
+				const day = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
+				for (const [fileId, total] of totals) {
+					const record = day.dailyReadData[fileId] ?? {fileId, filePath: total.filePath, duration: 0, openCount: 0};
+					record.duration = Math.max(record.duration, total.duration);
+					record.openCount = Math.max(record.openCount, total.count);
+					day.dailyReadData[fileId] = record;
+				}
+				data.dailyData[date] = day;
 			}
 			return {eventsAdded: data.eventLog.length - originalEvents, sessionsAdded: Math.max(0, sessions.size - originalSessions), progressAdded: Math.max(0, data.progressEntries.length - originalProgress)};
 		});

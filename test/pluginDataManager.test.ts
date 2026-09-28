@@ -148,6 +148,36 @@ test("3.0 snapshot merge keeps unique records and an auditable event log", async
 	assert.equal(manager.getStudyEvents().length, before);
 });
 
+test("3.0 snapshot merge keeps session, total, and daily durations consistent", async () => {
+	const first = createManager({readData: {}, dailyData: {}, settings: {}}).manager;
+	const second = createManager({readData: {}, dailyData: {}, settings: {}}).manager;
+	await first.loadData();
+	await second.loadData();
+	await first.ensureDeviceId();
+	await second.ensureDeviceId();
+	const openedAt = new Date(2026, 8, 1, 10).getTime();
+	await first.createManualSession({fileId: "a", filePath: "A.md", openedAt, duration: 10 * 60_000});
+	await second.createManualSession({fileId: "a", filePath: "A.md", openedAt: openedAt + 1000, duration: 20 * 60_000});
+	await first.mergeData(second.exportData());
+	const sessionDuration = first.getSessions().reduce((sum, session) => sum + session.duration, 0);
+	const dailyDuration = Object.values(first.getDailyReadData("2026-9-1")?.dailyReadData ?? {}).reduce((sum, record) => sum + record.duration, 0);
+	assert.equal(sessionDuration, 30 * 60_000);
+	assert.equal(first.getReadRecord("A.md")?.duration, sessionDuration);
+	assert.equal(dailyDuration, sessionDuration);
+});
+
+test("3.0 events preserve engagement changes and renamed paths after merge", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	await manager.ensureDeviceId();
+	const session = await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt: 1000, duration: 60_000});
+	await manager.setSessionEngagement(session.id, "quiet-study");
+	await manager.renameFilePath("A.md", "Renamed.md");
+	await manager.mergeData(manager.exportData());
+	assert.equal(manager.getSession(session.id)?.engagement, "quiet-study");
+	assert.equal(manager.getSession(session.id)?.filePath, "Renamed.md");
+});
+
 test("serialized mutations do not lose concurrently added sessions", async () => {
 	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
 	await manager.loadData();

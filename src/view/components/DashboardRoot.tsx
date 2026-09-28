@@ -98,7 +98,7 @@ export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSele
 					onClick={() => handleViewChange('records')}
                 />
                 <SidebarButton
-                    icon="ellipsis"
+					icon="ellipsis"
 					label={I18n.t('moreHub')}
 					active={viewType === 'more'}
 					onClick={() => handleViewChange('more')}
