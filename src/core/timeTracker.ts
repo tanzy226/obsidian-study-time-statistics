@@ -10,6 +10,7 @@ import StudyTimeStatisticsPlugin from "../main";
 import {Context} from "../context/context";
 import {createSessionId} from "../util/sessionUtils";
 import {classifySessionEngagement} from "../util/activityClassifier";
+import {isIdle, shouldKeepSession} from "../util/trackingPrecision";
 
 export class TimeTracker {
 	private readonly app: App;
@@ -37,6 +38,10 @@ export class TimeTracker {
 		plugin.registerDomEvent(document, "keydown", () => this.recordInteraction());
 		plugin.registerDomEvent(document, "pointerdown", () => this.recordInteraction());
 		plugin.registerDomEvent(document, "scroll", () => this.recordInteraction(), true);
+		plugin.registerDomEvent(document, "touchstart", () => this.recordInteraction(), {passive: true});
+		plugin.registerDomEvent(document, "visibilitychange", () => {
+			if (document.hidden) this.handleWindowBlur(); else this.handleWindowFocus();
+		});
 		this.app.workspace.onLayoutReady(() => { void this.handleFileChange(); });
 	}
 
@@ -89,6 +94,7 @@ export class TimeTracker {
 					interactionCount: 0,
 					engagement: "unclassified"
 				};
+				this.lastInteractionRecordedAt = openedAt;
 			}
 			this.lastRefreshAt = Date.now();
 			this.updateStatusBar();
@@ -209,7 +215,9 @@ export class TimeTracker {
 			engagement: classifySessionEngagement(this.currentSession)
 		};
 		this.currentSession = null;
-		await this.dailyReadDataManager.saveSession(session);
+		if (shouldKeepSession(session, this.dataManager.getTrackingPrecision().minimumSessionSeconds)) {
+			await this.dailyReadDataManager.saveSession(session);
+		}
 	}
 
 	public getTotalReadData(file: TFile): ReadRecord | undefined {
@@ -229,6 +237,11 @@ export class TimeTracker {
 	}
 
 	private needSuspendTimer() {
-		return this.isStrictMode() && !this.windowFocus;
+		if (this.isStrictMode() && !this.windowFocus) return true;
+		return this.currentSession !== null && isIdle(
+			this.lastInteractionRecordedAt || this.currentSession.openedAt,
+			Date.now(),
+			this.dataManager.getTrackingPrecision().idleTimeoutMinutes
+		);
 	}
 }

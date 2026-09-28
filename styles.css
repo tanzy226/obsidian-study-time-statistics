@@ -1520,4 +1520,22 @@
 		width: calc(100% - 16px);
 		padding: 6px 10px;
 	}
+
+	.study-time-statistics-modal-container {
+		font-size: 14px;
+	}
+
+	.study-time-statistics-content {
+		padding: 14px;
+	}
+
+	.study-metric-grid,
+	.attention-grid,
+	.analysis-filter-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.study-table-scroll {
+		max-height: 55vh;
+	}
 }
