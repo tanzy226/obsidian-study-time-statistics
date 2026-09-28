@@ -13,11 +13,12 @@ import {FeedbackView} from "./FeedbackView";
 import {DataHealthView} from "./DataHealthView";
 import {AnalysisExplorerView} from "./AnalysisExplorerView";
 import {AttentionMapView} from "./AttentionMapView";
+import {ReportsView} from "./ReportsView";
 
 type ViewType = 'overview' | 'analytics' | 'records' | 'more';
 type AnalyticsTab = 'summary' | 'trends' | 'filter' | 'investment' | 'ranking';
 type RecordsTab = 'sessions' | 'progress' | 'goals';
-type MoreTab = 'health' | 'feedback';
+type MoreTab = 'reports' | 'health' | 'feedback';
 
 export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSelect: (filePath: string) => void }) {
     const { plugin, onSelect } = props;
@@ -149,11 +150,13 @@ function RecordsHub({plugin, onSelect}: {plugin: StudyTimeStatisticsPlugin; onSe
 }
 
 function MoreHub({plugin}: {plugin: StudyTimeStatisticsPlugin}) {
-	const [tab, setTab] = React.useState<MoreTab>('health');
+	const [tab, setTab] = React.useState<MoreTab>('reports');
 	return <><HubTabs value={tab} onChange={setTab} items={[
+		{value: 'reports', label: I18n.t('reports')},
 		{value: 'health', label: I18n.t('dataHealth')},
 		{value: 'feedback', label: I18n.t('feedback')}
 	]} />
+		{tab === 'reports' && <ReportsView plugin={plugin} />}
 		{tab === 'health' && <DataHealthView plugin={plugin} />}
 		{tab === 'feedback' && <FeedbackView plugin={plugin} />}
 	</>;

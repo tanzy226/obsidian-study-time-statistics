@@ -68,6 +68,36 @@
 	font-size: var(--font-ui-small);
 }
 
+.analysis-filter-grid .report-checkbox {
+	display: flex;
+	grid-column: span 2;
+	flex-direction: row;
+	align-items: center;
+}
+
+.report-preview {
+	max-height: 52vh;
+	overflow: auto;
+	padding: 14px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	white-space: pre-wrap;
+}
+
+@media print {
+	.study-time-statistics-sidebar,
+	.sidebar-toggle,
+	.analysis-filter-grid,
+	.data-health-actions {
+		display: none;
+	}
+
+	.report-preview {
+		max-height: none;
+		border: 0;
+	}
+}
+
 .reading-time-text > span[aria-hidden] {
 	display: inline-flex;
 }
