@@ -23,6 +23,19 @@
 	overflow-wrap: anywhere;
 }
 
+.data-import-label {
+	display: inline-flex;
+	align-items: center;
+	padding: 6px 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--button-radius);
+	cursor: pointer;
+}
+
+.data-import-label input {
+	display: none;
+}
+
 .analysis-filter-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

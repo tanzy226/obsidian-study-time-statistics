@@ -132,6 +132,20 @@ test("completed automatic sessions do not double-count time already tracked", as
 	assert.equal(manager.getReadRecord("A.md")?.duration, 6_000);
 	assert.equal(manager.getReadRecord("A.md")?.openCount, 1);
 	assert.equal(manager.getSessions().length, 1);
+	assert.equal(manager.getStudyEvents().some(event => event.entityId === "session-a"), true);
+});
+
+test("3.0 snapshot merge keeps unique records and an auditable event log", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	await manager.ensureDeviceId();
+	await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt: 1000, duration: 500});
+	const snapshot = manager.exportData();
+	const before = manager.getStudyEvents().length;
+	const result = await manager.mergeData(snapshot);
+	assert.equal(result.eventsAdded, 0);
+	assert.equal(manager.getSessions().length, 1);
+	assert.equal(manager.getStudyEvents().length, before);
 });
 
 test("serialized mutations do not lose concurrently added sessions", async () => {

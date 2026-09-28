@@ -52,6 +52,7 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 		this.dailyReadDataManager = new DailyReadDataManager(this._dataManager);
 
 		await this.dataManager.loadData();
+		await this.dataManager.ensureDeviceId();
 		this.init();
 
 	}

@@ -6,8 +6,9 @@ import {ReadingProgressEntry, ReadingProgressInput} from "../interface/readingPr
 import {clampPercent, createProgressId} from "../util/readingProgressUtils";
 import {repairSessions} from "../util/dataHealth";
 import {DEFAULT_TRACKING_PRECISION, normalizeTrackingPrecision, TrackingPrecisionSettings} from "../util/trackingPrecision";
+import {createStudyEvent, latestEventsByEntity, legacySessionEvent, mergeStudyEvents, parseStudyEvent, StudyEvent} from "./studyEventEngine";
 
-export const CURRENT_DATA_VERSION = 6;
+export const CURRENT_DATA_VERSION = 7;
 
 export interface DailyReadData {
 	dailyReadData: Record<string, ReadRecord>;
@@ -19,6 +20,8 @@ interface PluginData {
 	readData: Record<string, ReadRecord>;
 	dailyData: Record<string, DailyReadData>;
 	progressEntries: ReadingProgressEntry[];
+	deviceId: string;
+	eventLog: StudyEvent[];
 	settings: {
 		strictMode?: boolean;
 		progressTrackingEnabled?: boolean;
@@ -37,7 +40,7 @@ export interface ManualSessionInput {
 }
 
 function emptyPluginData(): PluginData {
-	return {dataVersion: CURRENT_DATA_VERSION, readData: {}, dailyData: {}, progressEntries: [], settings: {}};
+	return {dataVersion: CURRENT_DATA_VERSION, readData: {}, dailyData: {}, progressEntries: [], deviceId: "", eventLog: [], settings: {}};
 }
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
@@ -166,6 +169,8 @@ function parsePluginData(value: unknown): PluginData {
 		minimumSessionSeconds: finiteNumber(rawSettings?.minimumSessionSeconds, DEFAULT_TRACKING_PRECISION.minimumSessionSeconds)
 	});
 	const rawProgressEntries = source.progressEntries;
+	const parsedEvents = Array.isArray(source.eventLog) ? source.eventLog.map(parseStudyEvent).filter((event): event is StudyEvent => event !== undefined) : [];
+	const migratedEvents = parsedEvents.length ? parsedEvents : Object.values(dailyData).flatMap(day => day.sessions.map(session => legacySessionEvent(session, session)));
 	return {
 		dataVersion: CURRENT_DATA_VERSION,
 		readData: parseReadData(source.readData),
@@ -173,12 +178,14 @@ function parsePluginData(value: unknown): PluginData {
 		progressEntries: Array.isArray(rawProgressEntries)
 			? rawProgressEntries.map(parseProgressEntry).filter((entry): entry is ReadingProgressEntry => entry !== undefined)
 			: [],
+		deviceId: typeof source.deviceId === "string" ? source.deviceId : "",
+		eventLog: mergeStudyEvents(migratedEvents),
 		settings: {
 			...(typeof strictMode === "boolean" ? {strictMode} : {}),
 			...(typeof progressTrackingEnabled === "boolean" ? {progressTrackingEnabled} : {}),
 			...(typeof dailyGoalMinutes === "number" && Number.isFinite(dailyGoalMinutes) ? {dailyGoalMinutes: Math.max(0, dailyGoalMinutes)} : {}),
-			...(typeof weeklyGoalMinutes === "number" && Number.isFinite(weeklyGoalMinutes) ? {weeklyGoalMinutes: Math.max(0, weeklyGoalMinutes)} : {})
-			,idleTimeoutMinutes: precision.idleTimeoutMinutes,
+			...(typeof weeklyGoalMinutes === "number" && Number.isFinite(weeklyGoalMinutes) ? {weeklyGoalMinutes: Math.max(0, weeklyGoalMinutes)} : {}),
+			idleTimeoutMinutes: precision.idleTimeoutMinutes,
 			minimumSessionSeconds: precision.minimumSessionSeconds
 		}
 	};
@@ -200,6 +207,13 @@ export class PluginDataManager {
 	public async loadData(): Promise<void> {
 		await this.mutationQueue;
 		await this.loadUnlocked();
+	}
+
+	public async ensureDeviceId(): Promise<string> {
+		return this.mutate(data => {
+			data.deviceId ||= `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+			return data.deviceId;
+		});
 	}
 
 	private async saveUnlocked(): Promise<void> {
@@ -338,7 +352,10 @@ export class PluginDataManager {
 			createdAt: now,
 			updatedAt: now
 		};
-		await this.mutate(data => { data.progressEntries.push(entry); });
+		await this.mutate(data => {
+			data.progressEntries.push(entry);
+			this.appendEvent(data, "progress", entry.id, "upsert", entry.fileId, entry);
+		});
 		return {...entry};
 	}
 
@@ -360,6 +377,7 @@ export class PluginDataManager {
 				updatedAt: Date.now()
 			};
 			data.progressEntries[index] = updated;
+			this.appendEvent(data, "progress", updated.id, "upsert", updated.fileId, updated);
 			return {...updated};
 		});
 	}
@@ -367,7 +385,9 @@ export class PluginDataManager {
 	public async deleteProgressEntry(id: string): Promise<boolean> {
 		return this.mutate(data => {
 			const originalLength = data.progressEntries.length;
+			const existing = data.progressEntries.find(entry => entry.id === id);
 			data.progressEntries = data.progressEntries.filter(entry => entry.id !== id);
+			if (existing) this.appendEvent(data, "progress", id, "delete", existing.fileId);
 			return data.progressEntries.length !== originalLength;
 		});
 	}
@@ -387,6 +407,7 @@ export class PluginDataManager {
 				}
 			}
 			for (const entry of data.progressEntries) if (entry.filePath === oldPath) entry.filePath = newPath;
+			this.appendEvent(data, "note", record?.fileId ?? oldPath, "rename", record?.fileId, {oldPath, newPath});
 		});
 	}
 
@@ -425,6 +446,7 @@ export class PluginDataManager {
 			const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
 			if (!daily.sessions.some(candidate => candidate.id === session.id)) daily.sessions.push({...session});
 			data.dailyData[date] = daily;
+			this.appendEvent(data, "session", session.id, "upsert", session.fileId, session);
 		});
 	}
 
@@ -444,6 +466,7 @@ export class PluginDataManager {
 		await this.mutate(data => {
 			this.applySessionDelta(data, session, 1);
 			this.addSessionToDay(data, session);
+			this.appendEvent(data, "session", session.id, "upsert", session.fileId, session);
 		});
 		return session;
 	}
@@ -466,6 +489,7 @@ export class PluginDataManager {
 			this.applySessionDelta(data, existing, -1);
 			this.applySessionDelta(data, updated, 1);
 			this.addSessionToDay(data, updated);
+			this.appendEvent(data, "session", updated.id, "upsert", updated.fileId, updated);
 			return {...updated};
 		});
 	}
@@ -476,6 +500,7 @@ export class PluginDataManager {
 			if (!existing) return false;
 			this.removeSessionFromDay(data, id);
 			this.applySessionDelta(data, existing, -1);
+			this.appendEvent(data, "session", existing.id, "delete", existing.fileId);
 			return true;
 		});
 	}
@@ -494,6 +519,64 @@ export class PluginDataManager {
 		return structuredClone(this.data);
 	}
 
+	public getStudyEvents(): StudyEvent[] {
+		return this.data.eventLog.map(event => structuredClone(event));
+	}
+
+	public async mergeData(value: unknown): Promise<{eventsAdded: number; sessionsAdded: number; progressAdded: number}> {
+		const source = asObject(value);
+		if (!source || !asObject(source.readData) || !asObject(source.dailyData)) throw new Error("Invalid Study Time Statistics data snapshot");
+		const incoming = parsePluginData(value);
+		return this.mutate(data => {
+			const originalEvents = data.eventLog.length;
+			const originalSessions = Object.values(data.dailyData).reduce((sum, day) => sum + day.sessions.length, 0);
+			const originalProgress = data.progressEntries.length;
+			data.eventLog = mergeStudyEvents(data.eventLog, incoming.eventLog);
+
+			const sessions = new Map<string, StudySession>();
+			for (const session of [...Object.values(data.dailyData).flatMap(day => day.sessions), ...Object.values(incoming.dailyData).flatMap(day => day.sessions)]) {
+				const existing = sessions.get(session.id);
+				if (!existing || session.updatedAt > existing.updatedAt) sessions.set(session.id, {...session});
+			}
+			const latestEvents = latestEventsByEntity(data.eventLog);
+			for (const [key, event] of latestEvents) {
+				if (!key.startsWith("session:")) continue;
+				if (event.operation === "delete") sessions.delete(event.entityId);
+				else {
+					const parsed = parseStudySession(event.payload);
+					if (parsed) sessions.set(parsed.id, parsed);
+				}
+			}
+			for (const daily of Object.values(data.dailyData)) daily.sessions = [];
+			for (const session of sessions.values()) this.addSessionToDay(data, session);
+
+			const progress = new Map(data.progressEntries.map(entry => [entry.id, entry]));
+			for (const entry of incoming.progressEntries) {
+				const existing = progress.get(entry.id);
+				if (!existing || entry.updatedAt > existing.updatedAt) progress.set(entry.id, {...entry});
+			}
+			for (const [key, event] of latestEvents) {
+				if (!key.startsWith("progress:")) continue;
+				if (event.operation === "delete") progress.delete(event.entityId);
+				else {
+					const parsed = parseProgressEntry(event.payload);
+					if (parsed) progress.set(parsed.id, parsed);
+				}
+			}
+			data.progressEntries = [...progress.values()];
+			for (const [path, record] of Object.entries(incoming.readData)) {
+				const existing = data.readData[path];
+				if (!existing) data.readData[path] = {...record};
+				else {
+					const firstOpenedAt = [existing.firstOpenedAt, record.firstOpenedAt].filter((item): item is number => item !== undefined);
+					const lastOpenedAt = Math.max(existing.lastOpenedAt ?? 0, record.lastOpenedAt ?? 0);
+					data.readData[path] = {...existing, duration: Math.max(existing.duration, record.duration), openCount: Math.max(existing.openCount, record.openCount), ...(firstOpenedAt.length ? {firstOpenedAt: Math.min(...firstOpenedAt)} : {}), ...(lastOpenedAt ? {lastOpenedAt} : {})};
+				}
+			}
+			return {eventsAdded: data.eventLog.length - originalEvents, sessionsAdded: Math.max(0, sessions.size - originalSessions), progressAdded: Math.max(0, data.progressEntries.length - originalProgress)};
+		});
+	}
+
 	public async importData(value: unknown): Promise<void> {
 		const source = asObject(value);
 		if (!source || !asObject(source.readData) || !asObject(source.dailyData)) {
@@ -505,6 +588,8 @@ export class PluginDataManager {
 			data.readData = parsed.readData;
 			data.dailyData = parsed.dailyData;
 			data.progressEntries = parsed.progressEntries;
+			data.deviceId = parsed.deviceId || data.deviceId;
+			data.eventLog = parsed.eventLog;
 			data.settings = parsed.settings;
 		});
 	}
@@ -515,6 +600,11 @@ export class PluginDataManager {
 			if (session) return session;
 		}
 		return undefined;
+	}
+
+	private appendEvent(data: PluginData, entity: StudyEvent["entity"], entityId: string, operation: StudyEvent["operation"], fileId?: string, payload?: unknown): void {
+		data.deviceId ||= `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+		data.eventLog.push(createStudyEvent({deviceId: data.deviceId, timestamp: Date.now(), entity, entityId, operation, ...(fileId ? {fileId} : {}), ...(payload !== undefined ? {payload: structuredClone(payload)} : {})}));
 	}
 
 	private addSessionToDay(data: PluginData, session: StudySession): void {
