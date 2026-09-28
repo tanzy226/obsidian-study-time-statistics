@@ -659,7 +659,9 @@ export class PluginDataManager {
 
 	private appendEvent(data: PluginData, entity: StudyEvent["entity"], entityId: string, operation: StudyEvent["operation"], fileId?: string, payload?: unknown): void {
 		data.deviceId ||= `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-		data.eventLog.push(createStudyEvent({deviceId: data.deviceId, timestamp: Date.now(), entity, entityId, operation, ...(fileId ? {fileId} : {}), ...(payload !== undefined ? {payload: structuredClone(payload)} : {})}));
+		const lastTimestamp = data.eventLog[data.eventLog.length - 1]?.timestamp ?? 0;
+		const timestamp = Math.max(Date.now(), lastTimestamp + 1);
+		data.eventLog.push(createStudyEvent({deviceId: data.deviceId, timestamp, entity, entityId, operation, ...(fileId ? {fileId} : {}), ...(payload !== undefined ? {payload: structuredClone(payload)} : {})}));
 	}
 
 	private addSessionToDay(data: PluginData, session: StudySession): void {
