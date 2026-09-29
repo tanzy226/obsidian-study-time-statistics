@@ -1324,9 +1324,11 @@
 }
 
 .study-simple-bar-fill {
+	display: block;
 	width: 100%;
 	height: 100%;
 	overflow: visible;
+	background: transparent;
 }
 
 .study-simple-bar-fill.level-0 rect { fill: transparent; }
