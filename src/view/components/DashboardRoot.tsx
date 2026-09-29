@@ -12,11 +12,14 @@ import {StudyCockpitView} from "./StudyCockpitView";
 import {FeedbackView} from "./FeedbackView";
 import {DataHealthView} from "./DataHealthView";
 
-type ViewType = 'cockpit' | 'leaderboard' | 'statistics' | 'studyAnalytics' | 'sessions' | 'progress' | 'goals' | 'health' | 'feedback';
+type ViewType = 'overview' | 'analytics' | 'records' | 'more';
+type AnalyticsTab = 'summary' | 'trends' | 'ranking';
+type RecordsTab = 'sessions' | 'progress' | 'goals';
+type MoreTab = 'health' | 'feedback';
 
 export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSelect: (filePath: string) => void }) {
     const { plugin, onSelect } = props;
-    const [viewType, setViewType] = React.useState<ViewType>('cockpit');
+    const [viewType, setViewType] = React.useState<ViewType>('overview');
     const [sidebarOpen, setSidebarOpen] = React.useState(false);
     const overlayRef = React.useRef<HTMLDivElement>(null);
     const toggleIconRef = React.useRef<HTMLSpanElement>(null);
@@ -76,72 +79,78 @@ export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSele
 				<SidebarButton
 					icon="layout-dashboard"
 					label={I18n.t('studyCockpit')}
-					active={viewType === 'cockpit'}
-					onClick={() => handleViewChange('cockpit')}
+					active={viewType === 'overview'}
+					onClick={() => handleViewChange('overview')}
 				/>
-                <SidebarButton 
-                    icon="bar-chart-3" 
-                    label={I18n.t('statistics')} 
-                    active={viewType === 'statistics'} 
-                    onClick={() => handleViewChange('statistics')} 
+                <SidebarButton
+                    icon="bar-chart-3"
+					label={I18n.t('analyticsHub')}
+					active={viewType === 'analytics'}
+					onClick={() => handleViewChange('analytics')}
                 />
                 <SidebarButton
-					icon="shield-check"
-					label="Data health / 数据健康"
-					active={viewType === 'health'}
-					onClick={() => handleViewChange('health')}
-				/>
-				<SidebarButton
-                    icon="activity"
-                    label={I18n.t('studyAnalytics')}
-                    active={viewType === 'studyAnalytics'}
-                    onClick={() => handleViewChange('studyAnalytics')}
-                />
-                <SidebarButton
-					icon="target"
-					label={I18n.t('studyGoals')}
-					active={viewType === 'goals'}
-					onClick={() => handleViewChange('goals')}
-				/>
-				<SidebarButton
                     icon="history"
-                    label={I18n.t('sessionHistory')}
-                    active={viewType === 'sessions'}
-                    onClick={() => handleViewChange('sessions')}
+					label={I18n.t('recordsHub')}
+					active={viewType === 'records'}
+					onClick={() => handleViewChange('records')}
                 />
                 <SidebarButton
-                    icon="percent"
-                    label={I18n.t('readingCoverage')}
-                    active={viewType === 'progress'}
-                    onClick={() => handleViewChange('progress')}
-                />
-                <SidebarButton 
-                    icon="trophy" 
-                    label={I18n.t('leaderboard')} 
-                    active={viewType === 'leaderboard'} 
-                    onClick={() => handleViewChange('leaderboard')} 
-                />
-                <SidebarButton
-                    icon="message-square-heart"
-                    label={I18n.t('feedback')}
-                    active={viewType === 'feedback'}
-                    onClick={() => handleViewChange('feedback')}
+                    icon="ellipsis"
+					label={I18n.t('moreHub')}
+					active={viewType === 'more'}
+					onClick={() => handleViewChange('more')}
                 />
             </div>
             
             <div className="study-time-statistics-content">
-				{viewType === 'cockpit' && <StudyCockpitView plugin={plugin} onSelect={onSelect} />}
-                {viewType === 'statistics' && <StatisticsView plugin={plugin} onSelect={onSelect} />}
-                {viewType === 'leaderboard' && <LeaderboardView plugin={plugin} onSelect={onSelect} />}
-                {viewType === 'studyAnalytics' && <StudyAnalyticsView plugin={plugin} onSelect={onSelect} />}
-                {viewType === 'sessions' && <SessionHistoryView plugin={plugin} onSelect={onSelect} />}
-                {viewType === 'progress' && <ReadingProgressView plugin={plugin} onSelect={onSelect} />}
-				{viewType === 'goals' && <StudyGoalsView plugin={plugin} onSelect={onSelect} />}
-				{viewType === 'health' && <DataHealthView plugin={plugin} />}
-                {viewType === 'feedback' && <FeedbackView plugin={plugin} />}
+				{viewType === 'overview' && <StudyCockpitView plugin={plugin} onSelect={onSelect} />}
+				{viewType === 'analytics' && <AnalyticsHub plugin={plugin} onSelect={onSelect} />}
+				{viewType === 'records' && <RecordsHub plugin={plugin} onSelect={onSelect} />}
+				{viewType === 'more' && <MoreHub plugin={plugin} />}
             </div>
         </div>
     );
+}
+
+function HubTabs<T extends string>({value, onChange, items}: {value: T; onChange: (value: T) => void; items: Array<{value: T; label: string}>}) {
+	return <div className="dashboard-subnav" role="tablist">{items.map(item => <button key={item.value} className={value === item.value ? "active" : ""} onClick={() => onChange(item.value)}>{item.label}</button>)}</div>;
+}
+
+function AnalyticsHub({plugin, onSelect}: {plugin: StudyTimeStatisticsPlugin; onSelect: (filePath: string) => void}) {
+	const [tab, setTab] = React.useState<AnalyticsTab>('summary');
+	return <><HubTabs value={tab} onChange={setTab} items={[
+		{value: 'summary', label: I18n.t('analyticsSummary')},
+		{value: 'trends', label: I18n.t('analyticsTrends')},
+		{value: 'ranking', label: I18n.t('leaderboard')}
+	]} />
+		{tab === 'summary' && <StudyAnalyticsView plugin={plugin} onSelect={onSelect} />}
+		{tab === 'trends' && <StatisticsView plugin={plugin} onSelect={onSelect} />}
+		{tab === 'ranking' && <LeaderboardView plugin={plugin} onSelect={onSelect} />}
+	</>;
+}
+
+function RecordsHub({plugin, onSelect}: {plugin: StudyTimeStatisticsPlugin; onSelect: (filePath: string) => void}) {
+	const [tab, setTab] = React.useState<RecordsTab>('sessions');
+	return <><HubTabs value={tab} onChange={setTab} items={[
+		{value: 'sessions', label: I18n.t('sessionHistory')},
+		{value: 'progress', label: I18n.t('readingCoverage')},
+		{value: 'goals', label: I18n.t('studyGoals')}
+	]} />
+		{tab === 'sessions' && <SessionHistoryView plugin={plugin} onSelect={onSelect} />}
+		{tab === 'progress' && <ReadingProgressView plugin={plugin} onSelect={onSelect} />}
+		{tab === 'goals' && <StudyGoalsView plugin={plugin} onSelect={onSelect} />}
+	</>;
+}
+
+function MoreHub({plugin}: {plugin: StudyTimeStatisticsPlugin}) {
+	const [tab, setTab] = React.useState<MoreTab>('health');
+	return <><HubTabs value={tab} onChange={setTab} items={[
+		{value: 'health', label: I18n.t('dataHealth')},
+		{value: 'feedback', label: I18n.t('feedback')}
+	]} />
+		{tab === 'health' && <DataHealthView plugin={plugin} />}
+		{tab === 'feedback' && <FeedbackView plugin={plugin} />}
+	</>;
 }
 
 function LeaderboardView(props: { plugin: StudyTimeStatisticsPlugin; onSelect: (filePath: string) => void }) {

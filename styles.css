@@ -1420,6 +1420,26 @@
 	white-space: nowrap;
 }
 
+.dashboard-subnav {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 18px;
+	overflow-x: auto;
+	padding-bottom: 4px;
+}
+
+.study-time-statistics-content .dashboard-subnav > button {
+	flex: 0 0 auto;
+	border-radius: 999px;
+	box-shadow: none;
+	color: var(--text-muted);
+}
+
+.study-time-statistics-content .dashboard-subnav > button.active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
 @media (width <= 768px) {
 	.study-two-column {
 		grid-template-columns: 1fr;
