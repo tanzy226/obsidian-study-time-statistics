@@ -4,6 +4,7 @@ import {NoteStudyRow, StudyAnalyticsResult} from "../../core/studyAnalytics";
 import {TimeUtils} from "../../util/timeUtils";
 import I18n from "../../language/i18n";
 import {recentDayAxisLabel} from "../../util/chartUtils";
+import {adaptiveLevel, linearHeight} from "../../util/visualScale";
 
 interface Props {
 	plugin: StudyTimeStatisticsPlugin;
@@ -159,31 +160,32 @@ function Section({title, subtitle, children}: {title: string; subtitle?: string;
 }
 
 function SimpleBars({items, labelStep = 1}: {items: Array<{label: string; value: number; title: string}>; labelStep?: number}) {
-	const max = Math.max(1, ...items.map(item => item.value));
+	const values = items.map(item => item.value);
 	const scrollRef = React.useRef<HTMLDivElement>(null);
 	React.useLayoutEffect(() => {
 		const element = scrollRef.current;
 		if (element) element.scrollLeft = element.scrollWidth;
 	}, [items.length]);
 	return <div className={`study-simple-bars ${items.length > 12 ? "is-dense" : ""}`} ref={scrollRef}>{items.map((item, index) => {
-		const barHeight = Math.max(item.value ? 4 : 0, item.value / max * 100);
+		const barHeight = linearHeight(values, item.value);
+		const level = adaptiveLevel(values, item.value);
 		const showLabel = Boolean(item.label) && (labelStep === 1 || index === 0 || index === items.length - 1 || index % labelStep === 0);
 		return <div className="study-simple-bar-item" key={`${item.label}-${index}`} title={item.title}>
-			<div className="study-simple-bar-track"><svg className="study-simple-bar-fill" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label={item.title}><rect x="0" y={100 - barHeight} width="100" height={barHeight} rx="3" /></svg></div>
+			<div className="study-simple-bar-track"><svg className={`study-simple-bar-fill level-${level}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-label={item.title}><rect x="0" y={100 - barHeight} width="100" height={barHeight} rx="3" /></svg></div>
 			<span className="study-simple-bar-label" aria-hidden={!showLabel}>{showLabel ? item.label : ""}</span>
 		</div>;
 	})}</div>;
 }
 
 function Heatmap({points}: {points: Array<{date: string; totalTime: number; sessionCount: number}>}) {
-	const max = Math.max(1, ...points.map(point => point.totalTime));
+	const values = points.map(point => point.totalTime);
 	const scrollRef = React.useRef<HTMLDivElement>(null);
 	React.useLayoutEffect(() => {
 		const element = scrollRef.current;
 		if (element) element.scrollLeft = element.scrollWidth;
 	}, [points.length]);
 	return <div className="study-heatmap" ref={scrollRef} aria-label={I18n.t("heatmapAriaLabel")}>{points.map(point => {
-		const level = point.totalTime === 0 ? 0 : Math.min(4, Math.max(1, Math.ceil(point.totalTime / max * 4)));
+		const level = adaptiveLevel(values, point.totalTime);
 		return <div key={point.date} className={`study-heatmap-cell level-${level}`} title={`${point.date} · ${I18n.t("times", {count: point.sessionCount})} · ${TimeUtils.getPreciseFormattedReadingTime(point.totalTime)}`} />;
 	})}</div>;
 }

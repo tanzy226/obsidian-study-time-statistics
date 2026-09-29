@@ -211,6 +211,26 @@
 	max-height: 800px;
 }
 
+.theme-light .study-time-statistics-dashboard-modal {
+	--sts-viz-1: #38bdf8;
+	--sts-viz-2: #0ea5e9;
+	--sts-viz-3: #6366f1;
+	--sts-viz-4: #8b5cf6;
+	--sts-viz-5: #db2777;
+	--sts-viz-core: #6366f1;
+	--sts-chart-track: rgb(148 163 184 / 12%);
+}
+
+.theme-dark .study-time-statistics-dashboard-modal {
+	--sts-viz-1: #67e8f9;
+	--sts-viz-2: #38bdf8;
+	--sts-viz-3: #818cf8;
+	--sts-viz-4: #c084fc;
+	--sts-viz-5: #f472b6;
+	--sts-viz-core: #818cf8;
+	--sts-chart-track: rgb(148 163 184 / 10%);
+}
+
 .study-time-statistics-modal-container {
 	display: flex;
 	height: 100%;
@@ -269,7 +289,7 @@
 }
 
 .sidebar-button.active {
-	background-color: var(--interactive-accent);
+	background-color: var(--sts-viz-core, var(--interactive-accent));
 	color: var(--text-on-accent);
 }
 
@@ -1295,10 +1315,11 @@
 	background: var(--background-modifier-border);
 }
 
-.study-heatmap-cell.level-1 { background: color-mix(in srgb, var(--interactive-accent) 28%, var(--background-primary)); }
-.study-heatmap-cell.level-2 { background: color-mix(in srgb, var(--interactive-accent) 48%, var(--background-primary)); }
-.study-heatmap-cell.level-3 { background: color-mix(in srgb, var(--interactive-accent) 72%, var(--background-primary)); }
-.study-heatmap-cell.level-4 { background: var(--interactive-accent); }
+.study-heatmap-cell.level-1 { background: var(--sts-viz-1, var(--interactive-accent)); }
+.study-heatmap-cell.level-2 { background: var(--sts-viz-2, var(--interactive-accent)); }
+.study-heatmap-cell.level-3 { background: var(--sts-viz-3, var(--interactive-accent)); }
+.study-heatmap-cell.level-4 { background: var(--sts-viz-4, var(--interactive-accent)); }
+.study-heatmap-cell.level-5 { background: var(--sts-viz-5, var(--interactive-accent)); }
 
 .study-simple-bars {
 	display: flex;
@@ -1328,7 +1349,8 @@
 	flex: 1;
 	align-items: flex-end;
 	border-radius: 3px 3px 0 0;
-	background: color-mix(in srgb, var(--background-modifier-border) 45%, transparent);
+	border: 1px solid color-mix(in srgb, var(--text-muted) 10%, transparent);
+	background: var(--sts-chart-track, rgb(148 163 184 / 10%));
 }
 
 .study-simple-bar-fill {
@@ -1337,9 +1359,12 @@
 	overflow: visible;
 }
 
-.study-simple-bar-fill rect {
-	fill: var(--interactive-accent);
-}
+.study-simple-bar-fill.level-0 rect { fill: transparent; }
+.study-simple-bar-fill.level-1 rect { fill: var(--sts-viz-1, var(--interactive-accent)); }
+.study-simple-bar-fill.level-2 rect { fill: var(--sts-viz-2, var(--interactive-accent)); }
+.study-simple-bar-fill.level-3 rect { fill: var(--sts-viz-3, var(--interactive-accent)); }
+.study-simple-bar-fill.level-4 rect { fill: var(--sts-viz-4, var(--interactive-accent)); }
+.study-simple-bar-fill.level-5 rect { fill: var(--sts-viz-5, var(--interactive-accent)); }
 
 .study-simple-bar-label {
 	width: 100%;
@@ -1481,7 +1506,7 @@
 }
 
 .study-time-statistics-content .dashboard-subnav > button.active {
-	background: var(--interactive-accent);
+	background: var(--sts-viz-core, var(--interactive-accent));
 	color: var(--text-on-accent);
 }
 
