@@ -171,7 +171,7 @@ function SimpleBars({items, labelStep = 1}: {items: Array<{label: string; value:
 		const level = adaptiveLevel(values, item.value);
 		const showLabel = Boolean(item.label) && (labelStep === 1 || index === 0 || index === items.length - 1 || index % labelStep === 0);
 		return <div className="study-simple-bar-item" key={`${item.label}-${index}`} title={item.title}>
-			<div className="study-simple-bar-track"><svg className={`study-simple-bar-fill level-${level}`} viewBox="0 0 100 100" preserveAspectRatio="none" aria-label={item.title}><rect x="0" y={100 - barHeight} width="100" height={barHeight} rx="3" /></svg></div>
+			<div className="study-simple-bar-track"><div className={`study-analytics-bar-fill level-${level}`} style={{height: `${barHeight}%`}} role="img" aria-label={item.title} /></div>
 			<span className="study-simple-bar-label" aria-hidden={!showLabel}>{showLabel ? item.label : ""}</span>
 		</div>;
 	})}</div>;
