@@ -1338,6 +1338,18 @@
 .study-simple-bar-fill.level-4 rect { fill: var(--sts-viz-4, var(--interactive-accent)); }
 .study-simple-bar-fill.level-5 rect { fill: var(--sts-viz-5, var(--interactive-accent)); }
 
+.study-analytics-bar-fill {
+	width: 100%;
+	border-radius: 3px 3px 0 0;
+	background: transparent;
+}
+
+.study-analytics-bar-fill.level-1 { background: var(--sts-viz-1, var(--interactive-accent)); }
+.study-analytics-bar-fill.level-2 { background: var(--sts-viz-2, var(--interactive-accent)); }
+.study-analytics-bar-fill.level-3 { background: var(--sts-viz-3, var(--interactive-accent)); }
+.study-analytics-bar-fill.level-4 { background: var(--sts-viz-4, var(--interactive-accent)); }
+.study-analytics-bar-fill.level-5 { background: var(--sts-viz-5, var(--interactive-accent)); }
+
 .study-simple-bar-label {
 	width: 100%;
 	max-width: 32px;
