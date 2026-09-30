@@ -454,18 +454,59 @@ export class PluginDataManager {
 
 	public async repairSessionData(): Promise<{removed: number}> {
 		return this.mutate(data => {
-			let removed = 0;
-			const seen = new Set<string>();
-			for (const daily of Object.values(data.dailyData)) {
-				const before = daily.sessions.length;
-				daily.sessions = repairSessions(daily.sessions).filter(session => {
-					if (seen.has(session.id)) return false;
-					seen.add(session.id);
-					return true;
-				});
-				removed += before - daily.sessions.length;
+			type SessionTotal = {duration: number; count: number; fileId: string; filePath: string};
+			const summarize = (sessions: StudySession[]) => {
+				const total = new Map<string, SessionTotal>();
+				const daily = new Map<string, Map<string, SessionTotal>>();
+				for (const session of sessions) {
+					const aggregate = total.get(session.fileId) ?? {duration: 0, count: 0, fileId: session.fileId, filePath: session.filePath};
+					aggregate.duration += session.duration;
+					aggregate.count++;
+					aggregate.filePath = session.filePath;
+					total.set(session.fileId, aggregate);
+					for (const slice of splitDurationByLocalDay(session.openedAt, session.duration)) {
+						const day = daily.get(slice.key) ?? new Map<string, SessionTotal>();
+						const point = day.get(session.fileId) ?? {duration: 0, count: 0, fileId: session.fileId, filePath: session.filePath};
+						point.duration += slice.duration;
+						point.filePath = session.filePath;
+						day.set(session.fileId, point);
+						daily.set(slice.key, day);
+					}
+				}
+				return {total, daily};
+			};
+			const beforeSessions = Object.values(data.dailyData).flatMap(day => day.sessions);
+			const afterSessions = repairSessions(beforeSessions);
+			const before = summarize(beforeSessions);
+			const after = summarize(afterSessions);
+
+			for (const record of Object.values(data.readData)) {
+				const oldSessions = before.total.get(record.fileId);
+				const keptSessions = after.total.get(record.fileId);
+				record.duration = Math.max(0, record.duration - (oldSessions?.duration ?? 0)) + (keptSessions?.duration ?? 0);
+				record.openCount = Math.max(0, record.openCount - (oldSessions?.count ?? 0)) + (keptSessions?.count ?? 0);
 			}
-			return {removed};
+
+			for (const daily of Object.values(data.dailyData)) daily.sessions = [];
+			for (const session of afterSessions) {
+				const date = localDateKey(session.openedAt);
+				const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
+				daily.sessions.push({...session});
+				data.dailyData[date] = daily;
+			}
+			for (const date of new Set([...Object.keys(data.dailyData), ...before.daily.keys(), ...after.daily.keys()])) {
+				const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
+				const oldSessions = before.daily.get(date) ?? new Map<string, SessionTotal>();
+				const keptSessions = after.daily.get(date) ?? new Map<string, SessionTotal>();
+				for (const [fileId, record] of Object.entries(daily.dailyReadData)) {
+					record.duration = Math.max(0, record.duration - (oldSessions.get(fileId)?.duration ?? 0)) + (keptSessions.get(fileId)?.duration ?? 0);
+				}
+				for (const [fileId, aggregate] of keptSessions) {
+					if (!daily.dailyReadData[fileId]) daily.dailyReadData[fileId] = {fileId, filePath: aggregate.filePath, duration: aggregate.duration, openCount: 0};
+				}
+				data.dailyData[date] = daily;
+			}
+			return {removed: beforeSessions.length - afterSessions.length};
 		});
 	}
 
