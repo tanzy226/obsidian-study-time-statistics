@@ -48,21 +48,69 @@
 
 .attention-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 	gap: 10px;
 }
 
 .attention-node {
 	display: grid;
-	gap: 8px;
-	min-height: 92px;
+	gap: 12px;
+	min-width: 0;
+	max-width: 100%;
+	min-height: 116px;
+	height: auto;
+	overflow: hidden;
 	padding: 14px;
-	border: 1px solid color-mix(in srgb, var(--interactive-accent) calc(25% + var(--attention-weight) * 45%), var(--background-modifier-border));
-	background: color-mix(in srgb, var(--interactive-accent) calc(4% + var(--attention-weight) * 18%), var(--background-primary));
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
 	text-align: left;
+	white-space: normal;
 }
 
-.attention-node span,
+.attention-node:hover,
+.attention-node:focus-visible {
+	border-color: var(--interactive-accent);
+}
+
+.attention-node-title {
+	min-width: 0;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.attention-node-metrics {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+	gap: 6px;
+	min-width: 0;
+	width: 100%;
+}
+
+.attention-node-metric {
+	display: grid;
+	align-content: start;
+	gap: 3px;
+	min-width: 0;
+	padding: 7px;
+	border-radius: var(--radius-s);
+	background: var(--background-primary);
+}
+
+.attention-node-metric small {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.2;
+}
+
+.attention-node-metric b {
+	min-width: 0;
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
 .study-path-list {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);

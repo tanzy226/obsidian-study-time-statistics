@@ -15,7 +15,6 @@ export function AttentionMapView({plugin, onSelect}: {plugin: StudyTimeStatistic
 	const vaultPaths = plugin.app.vault.getFiles().filter(file => file.extension === "md" || file.extension === "pdf").map(file => file.path);
 	const nodes = buildAttentionNodes(plugin.dataManager.getReadData(), plugin.dataManager.getProgressEntries(), parentPath, vaultPaths)
 		.sort((a, b) => attentionScore(b, metric) - attentionScore(a, metric));
-	const maximum = Math.max(1, ...nodes.map(node => attentionScore(node, metric)));
 	const paths = buildStudyPath(plugin.dataManager.getSessions());
 
 	return <div className="attention-map-view">
@@ -27,10 +26,14 @@ export function AttentionMapView({plugin, onSelect}: {plugin: StudyTimeStatistic
 			<span>{parentPath || text("Vault", "仓库")}</span>
 		</div>
 		<div className="attention-grid">{nodes.map(node => {
-			const weight = attentionScore(node, metric) / maximum;
 			const isNote = node.path.endsWith(".md") || node.path.endsWith(".pdf");
-			return <button key={node.path} className="attention-node" style={{"--attention-weight": String(weight)} as React.CSSProperties} onClick={() => isNote ? onSelect(node.path) : setParentPath(node.path)}>
-				<strong>{node.label}</strong><span>{TimeUtils.getFormattedReadingTime(node.duration)} · {text(`${node.opens} opens`, `打开 ${node.opens} 次`)} · {text(`${node.noteCount} notes`, `${node.noteCount} 篇`)}</span>
+			return <button key={node.path} className="attention-node" title={node.path} onClick={() => isNote ? onSelect(node.path) : setParentPath(node.path)}>
+				<strong className="attention-node-title">{node.label}</strong>
+				<span className="attention-node-metrics">
+					<span className="attention-node-metric"><small>{text("Time", "时长")}</small><b>{TimeUtils.getFormattedReadingTime(node.duration)}</b></span>
+					<span className="attention-node-metric"><small>{text("Opens", "打开次数")}</small><b>{node.opens.toLocaleString()}</b></span>
+					<span className="attention-node-metric"><small>{text("Notes", "笔记数")}</small><b>{node.noteCount.toLocaleString()}</b></span>
+				</span>
 			</button>;
 		})}</div>
 		<h3>{text("Frequent transitions", "常见连续阅读")}</h3>
