@@ -244,6 +244,29 @@ test("3.0 merge does not resurrect a path from before a rename", async () => {
 	assert.equal(manager.getSessions()[0]?.filePath, "Renamed.md");
 });
 
+test("safe session repair keeps aggregate totals consistent", async () => {
+	const openedAt = new Date(2026, 8, 30, 10).getTime();
+	const base = {id: "duplicate", fileId: "a", filePath: "A.md", openedAt, source: "automatic" as const, createdAt: openedAt};
+	const {manager} = createManager({
+		readData: {"A.md": {fileId: "a", filePath: "A.md", duration: 12_000, openCount: 2}},
+		dailyData: {"2026-9-30": {
+			dailyReadData: {a: {fileId: "a", filePath: "A.md", duration: 12_000, openCount: 0}},
+			sessions: [
+				{...base, duration: 5_000, closedAt: openedAt + 5_000, updatedAt: openedAt + 5_000},
+				{...base, duration: 7_000, closedAt: openedAt + 7_000, updatedAt: openedAt + 7_000}
+			]
+		}},
+		settings: {}
+	});
+	await manager.loadData();
+	const result = await manager.repairSessionData();
+	assert.equal(result.removed, 1);
+	assert.equal(manager.getSessions().length, 1);
+	assert.equal(manager.getReadRecord("A.md")?.duration, 7_000);
+	assert.equal(manager.getReadRecord("A.md")?.openCount, 1);
+	assert.equal(manager.getDailyReadData("2026-9-30")?.dailyReadData.a?.duration, 7_000);
+});
+
 test("serialized mutations do not lose concurrently added sessions", async () => {
 	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
 	await manager.loadData();
