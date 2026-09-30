@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
 import {attentionScore, buildAttentionNodes, buildStudyPath} from "../src/util/attentionMap";
 import type {ReadRecord} from "../src/interface/readRecord";
 import type {StudySession} from "../src/interface/studySession";
@@ -34,4 +35,15 @@ test("attention coverage combines repeated reading entries", () => {
 test("study paths count repeated transitions", () => {
 	const edges = buildStudyPath([session("1", "A.md", 1), session("2", "B.md", 2), session("3", "A.md", 3), session("4", "B.md", 4)]);
 	assert.equal(edges.find(edge => edge.from === "A.md" && edge.to === "B.md")?.count, 2);
+});
+
+test("investment cards use wrapping metric cells without intensity styling", () => {
+	const root = new URL("../", import.meta.url);
+	const component = readFileSync(new URL("src/view/components/AttentionMapView.tsx", root), "utf8");
+	const styles = readFileSync(new URL("styles.css", root), "utf8");
+	assert.match(component, /attention-node-metrics/);
+	assert.match(component, /attention-node-metric/);
+	assert.doesNotMatch(component, /--attention-weight/);
+	assert.match(styles, /\.attention-node-title[\s\S]*overflow-wrap: anywhere/);
+	assert.match(styles, /\.attention-node-metrics[\s\S]*minmax\(64px, 1fr\)/);
 });
