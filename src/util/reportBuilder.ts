@@ -46,7 +46,8 @@ export function buildStudyReport(sessions: StudySession[], options: StudyReportO
 }
 
 function csvCell(value: string | number): string {
-	const text = String(value);
+	const raw = String(value);
+	const text = typeof value === "string" && /^[\t\r ]*[=+\-@]/u.test(raw) ? `'${raw}` : raw;
 	return /[",\n]/u.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 

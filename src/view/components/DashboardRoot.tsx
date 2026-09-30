@@ -59,6 +59,7 @@ export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSele
             <button 
                 className={`sidebar-button ${props.active ? 'active' : ''}`}
                 onClick={props.onClick}
+				aria-current={props.active ? "page" : undefined}
             >
                 <span className="sidebar-button-icon" ref={iconRef}></span>
                 <span>{props.label}</span>
@@ -116,7 +117,7 @@ export function DashboardRoot(props: { plugin: StudyTimeStatisticsPlugin; onSele
 }
 
 function HubTabs<T extends string>({value, onChange, items}: {value: T; onChange: (value: T) => void; items: Array<{value: T; label: string}>}) {
-	return <div className="dashboard-subnav" role="tablist">{items.map(item => <button key={item.value} className={value === item.value ? "active" : ""} onClick={() => onChange(item.value)}>{item.label}</button>)}</div>;
+	return <div className="dashboard-subnav" role="tablist">{items.map(item => <button key={item.value} role="tab" aria-selected={value === item.value} className={value === item.value ? "active" : ""} onClick={() => onChange(item.value)}>{item.label}</button>)}</div>;
 }
 
 function AnalyticsHub({plugin, onSelect}: {plugin: StudyTimeStatisticsPlugin; onSelect: (filePath: string) => void}) {

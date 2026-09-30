@@ -1,11 +1,12 @@
+import * as React from "react";
 import I18n from "../../language/i18n";
 
 export interface BarChartData {
 	label: string;
-	value: number; // in milliseconds
+	value: number;
 }
 
-type TimeUnit = 'hours' | 'minutes';
+type TimeUnit = "hours" | "minutes";
 
 interface BarChartProps {
 	data: BarChartData[];
@@ -14,78 +15,46 @@ interface BarChartProps {
 	onBarClick?: (label: string) => void;
 }
 
-export function BarChart(props: BarChartProps) {
-	const { data, height = 200, onBarClick } = props;
-	const heightClass = height >= 250 ? 'bar-chart-tall' : 'bar-chart-regular';
+export function BarChart({data, height = 200, maxBars, onBarClick}: BarChartProps) {
+	const visibleData = maxBars && data.length > maxBars ? data.slice(-maxBars) : data;
+	if (visibleData.length === 0) return <div className="bar-chart-empty">{I18n.t("noDataAvailable")}</div>;
 
-	if (!data || data.length === 0) {
-		return <div className="bar-chart-empty">No data available</div>;
-	}
-
-	const dataInMinutes = data.map(item => ({
-		label: item.label,
-		value: item.value / (1000 * 60) // Convert to minutes
-	}));
-
-	// Determine the best unit based on max value
-	const nonZeroValues = dataInMinutes.filter(item => item.value > 0).map(item => item.value);
-	const maxMinutes = nonZeroValues.length > 0 ? Math.max(...nonZeroValues) : 1;
-
+	const minutes = visibleData.map(item => Math.max(0, item.value) / 60_000);
+	const maxMinutes = Math.max(0, ...minutes);
 	const useHours = maxMinutes > 60;
-	const unit: TimeUnit = useHours ? 'hours' : 'minutes';
+	const unit: TimeUnit = useHours ? "hours" : "minutes";
+	const values = minutes.map(value => useHours ? value / 60 : value);
+	const maxValue = Math.max(1, Math.ceil(Math.max(0, ...values)));
+	const unitLabel = unit === "hours" ? "h" : "min";
+	const heightClass = height >= 250 ? "bar-chart-tall" : "bar-chart-regular";
 
-	// Convert to appropriate unit
-	const displayData = dataInMinutes.map(item => ({
-		label: item.label,
-		value: useHours ? item.value / 60 : item.value
-	}));
-
-	const maxValue = useHours ? maxMinutes / 60 : maxMinutes;
-	const maxDisplayValue = Math.ceil(maxValue);
-
-	return (
-		<div className="bar-chart-container">
-			<div className={`bar-chart ${heightClass}`}>
-				{displayData.map((item, index) => {
-					const barHeight = item.value > 0 ? Math.max((item.value / maxDisplayValue) * 100, 1) : 0;
-					const displayValue = item.value < 0.1 ? item.value.toFixed(2) : item.value.toFixed(1);
-					const hasData = item.value > 0;
-					const unitLabel = unit === 'hours' ? 'h' : 'min';
-					const renderedHeight = hasData ? barHeight : 1;
-
-					const handleClick = () => {
-						if (hasData && onBarClick) {
-							onBarClick(item.label);
-						}
-					};
-
-					return (
-						<div key={index} className="bar-wrapper" onClick={handleClick}>
-							<div className="bar-container">
-								{hasData && (
-									<div className="bar-value-tooltip">
-										{displayValue}{unitLabel}
-									</div>
-								)}
-								<svg
-									className={`bar ${hasData && onBarClick ? 'bar-clickable' : ''} ${hasData ? '' : 'bar-empty'}`}
-									viewBox="0 0 100 100"
-									preserveAspectRatio="none"
-									aria-label={hasData ? `${item.label}: ${displayValue} ${unitLabel}` : `${item.label}: ${I18n.t('noDataAvailable')}`}
-								>
-									<rect x="0" y={100 - renderedHeight} width="100" height={renderedHeight} rx="4" />
-								</svg>
-							</div>
-							<div className="bar-label">{item.label}</div>
-						</div>
-					);
-				})}
-			</div>
-			<div className="bar-chart-y-axis">
-				<div className="y-axis-label">{maxDisplayValue}{unit === 'hours' ? 'h' : 'min'}</div>
-				<div className="y-axis-label">{(maxDisplayValue / 2).toFixed(1)}{unit === 'hours' ? 'h' : 'min'}</div>
-				<div className="y-axis-label">0{unit === 'hours' ? 'h' : 'min'}</div>
-			</div>
+	return <div className="bar-chart-container">
+		<div className="bar-chart-y-axis" aria-hidden="true">
+			<div className="y-axis-label">{maxValue}{unitLabel}</div>
+			<div className="y-axis-label">{(maxValue / 2).toFixed(1)}{unitLabel}</div>
+			<div className="y-axis-label">0{unitLabel}</div>
 		</div>
-	);
+		<div className={`bar-chart ${heightClass}`}>
+			<div className="bar-chart-grid-line bar-chart-grid-top" />
+			<div className="bar-chart-grid-line bar-chart-grid-middle" />
+			<div className="bar-chart-grid-line bar-chart-grid-bottom" />
+			{visibleData.map((item, index) => {
+				const value = values[index] ?? 0;
+				const hasData = value > 0;
+				const barHeight = hasData ? Math.max((value / maxValue) * 100, 1) : 0;
+				const displayValue = value > 0 && value < 0.01 ? "<0.01" : value < 0.1 ? value.toFixed(2) : value.toFixed(1);
+				const label = hasData ? `${item.label}: ${displayValue} ${unitLabel}` : `${item.label}: ${I18n.t("noDataAvailable")}`;
+				const fill = <span className={`sts-bar-fill ${hasData ? "" : "is-empty"}`} style={{height: `${barHeight}%`}} />;
+				return <div key={`${item.label}-${index}`} className="bar-wrapper">
+					<div className="bar-container">
+						{hasData && <span className="bar-value-tooltip">{displayValue}{unitLabel}</span>}
+						{hasData && onBarClick
+							? <button type="button" className="sts-bar-button" aria-label={label} title={label} onClick={() => onBarClick(item.label)}>{fill}</button>
+							: <div className="sts-bar-static" role="img" aria-label={label} title={label}>{fill}</div>}
+					</div>
+					<div className="bar-label" title={item.label}>{item.label}</div>
+				</div>;
+			})}
+		</div>
+	</div>;
 }

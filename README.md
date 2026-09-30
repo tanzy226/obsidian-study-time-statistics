@@ -43,7 +43,7 @@ Snapshot total: **2 notes**, **4 opens**, and **2m 44s** of recorded reading tim
 
 ## Open the dashboard
 
-Select the bar-chart icon in the left ribbon, or open the Command Palette and run **Open Study Time Statistics**. The dashboard contains Leaderboard, Statistics, Study Analytics, Sessions, and Reading Coverage sections. Reading Coverage is off by default and can be enabled from that section or the plugin settings.
+Select the bar-chart icon in the left ribbon, or open the Command Palette and run **Open Study Time Statistics**. The dashboard has four main areas: **Study overview**, **Analytics**, **Records**, and **More**. Rankings and filtered analysis live under Analytics; sessions, reading coverage, and goals live under Records; reports, data management, and feedback live under More. Reading Coverage is off by default and can be enabled from its page or the plugin settings.
 
 ## Installation
 

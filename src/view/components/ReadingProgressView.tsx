@@ -7,6 +7,7 @@ import {TimeUtils} from "../../util/timeUtils";
 import I18n from "../../language/i18n";
 import {ConfirmActionModal} from "../display/modal/sessionEditorModal";
 import {ProgressEntryModal} from "../display/modal/progressEntryModal";
+import {adaptiveLevel} from "../../util/visualScale";
 
 interface Props {
 	plugin: StudyTimeStatisticsPlugin;
@@ -28,6 +29,28 @@ function formatPercent(value: number): string {
 
 function formatSpeed(value: number): string {
 	return value > 0 ? I18n.t("charactersPerMinute", {count: Math.round(value)}) : I18n.t("notAvailable");
+}
+
+interface CoverageAggregate {
+	weighted: number;
+	characters: number;
+	unweighted: number;
+	count: number;
+}
+
+function addCoverage(aggregate: CoverageAggregate, entry: ReadingProgressEntry): void {
+	aggregate.count++;
+	aggregate.unweighted += entry.percent;
+	if (entry.characterCount > 0) {
+		aggregate.weighted += entry.percent * entry.characterCount;
+		aggregate.characters += entry.characterCount;
+	}
+}
+
+function coveragePercent(aggregate: CoverageAggregate): number {
+	return aggregate.characters > 0
+		? aggregate.weighted / aggregate.characters
+		: aggregate.unweighted / Math.max(1, aggregate.count);
 }
 
 export function ReadingProgressView({plugin, onSelect}: Props) {
@@ -80,27 +103,25 @@ export function ReadingProgressView({plugin, onSelect}: Props) {
 	const totalDuration = notes.reduce((sum, note) => sum + note.totalActiveDuration, 0);
 	const overallSpeed = totalDuration > 0 ? totalCovered / (totalDuration / 60_000) : 0;
 	const now = new Date();
-	const dailyMap = new Map<string, {percent: number; count: number}>();
+	const dailyMap = new Map<string, CoverageAggregate>();
 	for (const entry of entries) {
 		const key = localDateKey(entry.recordedAt);
-		const point = dailyMap.get(key) ?? {percent: 0, count: 0};
-		point.percent += entry.percent;
-		point.count++;
+		const point = dailyMap.get(key) ?? {weighted: 0, characters: 0, unweighted: 0, count: 0};
+		addCoverage(point, entry);
 		dailyMap.set(key, point);
 	}
 	const heatmap = Array.from({length: 365}, (_, offset) => {
 		const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (364 - offset));
 		const key = localDateKey(date.getTime());
-		return {date: key, ...(dailyMap.get(key) ?? {percent: 0, count: 0})};
+		const aggregate = dailyMap.get(key);
+		return {date: key, percent: aggregate ? coveragePercent(aggregate) : 0, count: aggregate?.count ?? 0};
 	});
-	const hourly = Array.from({length: 24}, (_, hour) => ({label: String(hour).padStart(2, "0"), value: 0, count: 0}));
+	const hourlyAggregates = Array.from({length: 24}, () => ({weighted: 0, characters: 0, unweighted: 0, count: 0}));
 	for (const entry of entries) {
-		const point = hourly[new Date(entry.recordedAt).getHours()];
-		if (point) {
-			point.value += entry.percent;
-			point.count++;
-		}
+		const point = hourlyAggregates[new Date(entry.recordedAt).getHours()];
+		if (point) addCoverage(point, entry);
 	}
+	const hourly = hourlyAggregates.map((point, hour) => ({label: String(hour).padStart(2, "0"), value: coveragePercent(point), count: point.count}));
 	const folders = buildFolderSummaries(notes);
 
 	return <div className="reading-progress-view">
@@ -184,17 +205,22 @@ function Section({title, subtitle, children}: {title: string; subtitle?: string;
 }
 
 function ProgressHeatmap({points}: {points: Array<{date: string; percent: number; count: number}>}) {
-	const max = Math.max(1, ...points.map(point => point.percent));
-	return <div className="study-heatmap" aria-label={I18n.t("coverageHeatmap")}>{points.map(point => {
-		const level = point.percent === 0 ? 0 : Math.min(4, Math.max(1, Math.ceil(point.percent / max * 4)));
+	const values = points.map(point => point.percent);
+	const scrollRef = React.useRef<HTMLDivElement>(null);
+	React.useEffect(() => {
+		const element = scrollRef.current;
+		if (element) element.scrollLeft = element.scrollWidth;
+	}, [points.length]);
+	return <><div className="study-heatmap" ref={scrollRef} aria-label={I18n.t("coverageHeatmap")}>{points.map(point => {
+		const level = adaptiveLevel(values, point.percent);
 		return <div key={point.date} className={`study-heatmap-cell level-${level}`} title={`${point.date} · ${point.count} · ${formatPercent(point.percent)}`} />;
-	})}</div>;
+	})}</div><div className="study-heatmap-legend"><span>{I18n.t("heatmapLess")}</span><span className="study-heatmap-cell level-1" /><span className="study-heatmap-cell level-2" /><span className="study-heatmap-cell level-3" /><span className="study-heatmap-cell level-4" /><span className="study-heatmap-cell level-5" /><span>{I18n.t("heatmapMore")}</span></div></>;
 }
 
 function ProgressBars({items}: {items: Array<{label: string; value: number; title: string}>}) {
 	const max = Math.max(1, ...items.map(item => item.value));
 	return <div className="study-simple-bars">{items.map(item => {
 		const height = Math.max(item.value ? 4 : 0, item.value / max * 100);
-		return <div className="study-simple-bar-item" key={item.label} title={item.title}><div className="study-simple-bar-track"><svg className="study-simple-bar-fill" viewBox="0 0 100 100" preserveAspectRatio="none"><rect x="0" y={100 - height} width="100" height={height} rx="3" /></svg></div><span>{item.label}</span></div>;
+		return <div className="study-simple-bar-item" key={item.label} title={item.title}><div className="study-simple-bar-track"><span className="study-simple-bar-fill" style={{height: `${height}%`}} /></div><span>{item.label}</span></div>;
 	})}</div>;
 }

@@ -7,6 +7,8 @@ import {clampPercent, createProgressId} from "../util/readingProgressUtils";
 import {repairSessions} from "../util/dataHealth";
 import {DEFAULT_TRACKING_PRECISION, normalizeTrackingPrecision, TrackingPrecisionSettings} from "../util/trackingPrecision";
 import {createStudyEvent, latestEventsByEntity, legacySessionEvent, mergeStudyEvents, parseStudyEvent, StudyEvent} from "./studyEventEngine";
+import {normalizeVisualizationColor, normalizeVisualizationColorMode, VisualizationAppearance} from "../util/visualizationAppearance";
+import {localDateKey, splitDurationByLocalDay} from "../util/timeBuckets";
 
 export const CURRENT_DATA_VERSION = 7;
 
@@ -17,6 +19,7 @@ export interface DailyReadData {
 
 interface PluginData {
 	dataVersion: number;
+	updatedAt: number;
 	readData: Record<string, ReadRecord>;
 	dailyData: Record<string, DailyReadData>;
 	progressEntries: ReadingProgressEntry[];
@@ -29,6 +32,8 @@ interface PluginData {
 		weeklyGoalMinutes?: number;
 		idleTimeoutMinutes?: number;
 		minimumSessionSeconds?: number;
+		visualizationColorMode?: "theme" | "custom";
+		visualizationCustomColor?: string;
 	};
 }
 
@@ -40,7 +45,7 @@ export interface ManualSessionInput {
 }
 
 function emptyPluginData(): PluginData {
-	return {dataVersion: CURRENT_DATA_VERSION, readData: {}, dailyData: {}, progressEntries: [], deviceId: "", eventLog: [], settings: {}};
+	return {dataVersion: CURRENT_DATA_VERSION, updatedAt: 0, readData: {}, dailyData: {}, progressEntries: [], deviceId: "", eventLog: [], settings: {}};
 }
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
@@ -51,11 +56,6 @@ function asObject(value: unknown): Record<string, unknown> | undefined {
 
 function finiteNumber(value: unknown, fallback = 0): number {
 	return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function dateKeyFromTimestamp(timestamp: number): string {
-	const date = new Date(timestamp);
-	return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
 function parseReadRecord(value: unknown, fallbackPath = ""): ReadRecord | undefined {
@@ -168,11 +168,14 @@ function parsePluginData(value: unknown): PluginData {
 		idleTimeoutMinutes: finiteNumber(rawSettings?.idleTimeoutMinutes, DEFAULT_TRACKING_PRECISION.idleTimeoutMinutes),
 		minimumSessionSeconds: finiteNumber(rawSettings?.minimumSessionSeconds, DEFAULT_TRACKING_PRECISION.minimumSessionSeconds)
 	});
+	const visualizationColorMode = normalizeVisualizationColorMode(rawSettings?.visualizationColorMode);
+	const visualizationCustomColor = normalizeVisualizationColor(rawSettings?.visualizationCustomColor);
 	const rawProgressEntries = source.progressEntries;
 	const parsedEvents = Array.isArray(source.eventLog) ? source.eventLog.map(parseStudyEvent).filter((event): event is StudyEvent => event !== undefined) : [];
 	const migratedEvents = parsedEvents.length ? parsedEvents : Object.values(dailyData).flatMap(day => day.sessions.map(session => legacySessionEvent(session, session)));
 	return {
 		dataVersion: CURRENT_DATA_VERSION,
+		updatedAt: Math.max(0, finiteNumber(source.updatedAt)),
 		readData: parseReadData(source.readData),
 		dailyData,
 		progressEntries: Array.isArray(rawProgressEntries)
@@ -186,7 +189,9 @@ function parsePluginData(value: unknown): PluginData {
 			...(typeof dailyGoalMinutes === "number" && Number.isFinite(dailyGoalMinutes) ? {dailyGoalMinutes: Math.max(0, dailyGoalMinutes)} : {}),
 			...(typeof weeklyGoalMinutes === "number" && Number.isFinite(weeklyGoalMinutes) ? {weeklyGoalMinutes: Math.max(0, weeklyGoalMinutes)} : {}),
 			idleTimeoutMinutes: precision.idleTimeoutMinutes,
-			minimumSessionSeconds: precision.minimumSessionSeconds
+			minimumSessionSeconds: precision.minimumSessionSeconds,
+			visualizationColorMode,
+			visualizationCustomColor
 		}
 	};
 }
@@ -196,6 +201,7 @@ export class PluginDataManager {
 	private mutationQueue: Promise<void> = Promise.resolve();
 	private revision = 0;
 	private readonly changeListeners = new Set<() => void>();
+	private runtimeDeviceId = "";
 
 	constructor(private readonly plugin: Plugin) {}
 
@@ -210,9 +216,22 @@ export class PluginDataManager {
 	}
 
 	public async ensureDeviceId(): Promise<string> {
+		if (!this.runtimeDeviceId) {
+			const storageKey = "study-time-statistics-device-id";
+			try {
+				const storage = typeof window === "undefined" ? undefined : window.localStorage;
+				this.runtimeDeviceId = storage?.getItem(storageKey) ?? "";
+				if (!this.runtimeDeviceId) {
+					this.runtimeDeviceId = `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+					storage?.setItem(storageKey, this.runtimeDeviceId);
+				}
+			} catch {
+				this.runtimeDeviceId = `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+			}
+		}
 		return this.mutate(data => {
-			data.deviceId ||= `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-			return data.deviceId;
+			data.deviceId = this.runtimeDeviceId;
+			return this.runtimeDeviceId;
 		});
 	}
 
@@ -223,7 +242,9 @@ export class PluginDataManager {
 	private mutate<T>(operation: (data: PluginData) => T | Promise<T>): Promise<T> {
 		const task = this.mutationQueue.then(async () => {
 			await this.loadUnlocked();
+			if (this.runtimeDeviceId) this.data.deviceId = this.runtimeDeviceId;
 			const result = await operation(this.data);
+			this.data.updatedAt = Math.max(Date.now(), this.data.updatedAt + 1);
 			await this.saveUnlocked();
 			this.revision += 1;
 			for (const listener of this.changeListeners) {
@@ -276,12 +297,56 @@ export class PluginDataManager {
 		return Object.keys(this.data.dailyData).sort();
 	}
 
+	public getAllDailyReadData(): Readonly<Record<string, DailyReadData>> {
+		return Object.fromEntries(Object.entries(this.data.dailyData).map(([date, value]) => [date, {
+			dailyReadData: Object.fromEntries(Object.entries(value.dailyReadData).map(([id, record]) => [id, {...record}])),
+			sessions: value.sessions.map(session => ({...session}))
+		}]));
+	}
+
 	public async setDailyReadData(date: string, value: DailyReadData): Promise<void> {
 		await this.mutate(data => {
 			data.dailyData[date] = {
 				dailyReadData: {...value.dailyReadData},
 				sessions: value.sessions.map(session => ({...session}))
 			};
+		});
+	}
+
+	public async recordFileOpened(filePath: string, fileId: string, openedAt: number): Promise<ReadRecord> {
+		return this.mutate(data => {
+			const current = data.readData[filePath];
+			const record: ReadRecord = {
+				fileId: current?.fileId ?? fileId,
+				filePath,
+				duration: current?.duration ?? 0,
+				openCount: (current?.openCount ?? 0) + 1,
+				firstOpenedAt: current?.firstOpenedAt ?? openedAt,
+				lastOpenedAt: openedAt
+			};
+			data.readData[filePath] = record;
+			return {...record};
+		});
+	}
+
+	public async addTrackedTime(filePath: string, fileId: string, elapsed: number, endedAt: number): Promise<void> {
+		const safeElapsed = Math.max(0, elapsed);
+		if (safeElapsed < 1) return;
+		await this.mutate(data => {
+			const total = data.readData[filePath] ?? {fileId, filePath, duration: 0, openCount: 1};
+			total.fileId = fileId;
+			total.filePath = filePath;
+			total.duration += safeElapsed;
+			data.readData[filePath] = total;
+
+			for (const slice of splitDurationByLocalDay(endedAt - safeElapsed, safeElapsed)) {
+				const daily = data.dailyData[slice.key] ?? {dailyReadData: {}, sessions: []};
+				const record = daily.dailyReadData[fileId] ?? {fileId, filePath, duration: 0, openCount: 0};
+				record.filePath = filePath;
+				record.duration += slice.duration;
+				daily.dailyReadData[fileId] = record;
+				data.dailyData[slice.key] = daily;
+			}
 		});
 	}
 
@@ -327,6 +392,21 @@ export class PluginDataManager {
 			const normalized = normalizeTrackingPrecision({...this.getTrackingPrecision(), ...value});
 			data.settings.idleTimeoutMinutes = normalized.idleTimeoutMinutes;
 			data.settings.minimumSessionSeconds = normalized.minimumSessionSeconds;
+		});
+	}
+
+	public getVisualizationAppearance(): VisualizationAppearance {
+		return {
+			colorMode: normalizeVisualizationColorMode(this.data.settings.visualizationColorMode),
+			customColor: normalizeVisualizationColor(this.data.settings.visualizationCustomColor)
+		};
+	}
+
+	public async setVisualizationAppearance(value: Partial<VisualizationAppearance>): Promise<void> {
+		await this.mutate(data => {
+			const current = this.getVisualizationAppearance();
+			data.settings.visualizationColorMode = normalizeVisualizationColorMode(value.colorMode ?? current.colorMode);
+			data.settings.visualizationCustomColor = normalizeVisualizationColor(value.customColor ?? current.customColor);
 		});
 	}
 
@@ -451,7 +531,7 @@ export class PluginDataManager {
 
 	public async recordCompletedSession(session: StudySession): Promise<void> {
 		await this.mutate(data => {
-			const date = dateKeyFromTimestamp(session.openedAt);
+			const date = localDateKey(session.openedAt);
 			const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
 			if (!daily.sessions.some(candidate => candidate.id === session.id)) daily.sessions.push({...session});
 			data.dailyData[date] = daily;
@@ -534,27 +614,106 @@ export class PluginDataManager {
 	}
 
 	public async mergeData(value: unknown): Promise<{eventsAdded: number; sessionsAdded: number; progressAdded: number}> {
-		const source = asObject(value);
-		if (!source || !asObject(source.readData) || !asObject(source.dailyData)) throw new Error("Invalid Study Time Statistics data snapshot");
-		const incoming = parsePluginData(value);
+		const wrapper = asObject(value);
+		const unwrapped = wrapper && asObject(wrapper.pluginData) ? wrapper.pluginData : value;
+		await this.validateImport(unwrapped);
+		const incoming = parsePluginData(unwrapped);
 		return this.mutate(data => {
-			const originalEvents = data.eventLog.length;
-			const originalSessions = Object.values(data.dailyData).reduce((sum, day) => sum + day.sessions.length, 0);
-			const originalProgress = data.progressEntries.length;
-			data.eventLog = mergeStudyEvents(data.eventLog, incoming.eventLog);
-			for (const [date, incomingDay] of Object.entries(incoming.dailyData)) {
-				const currentDay = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
-				for (const [fileId, incomingRecord] of Object.entries(incomingDay.dailyReadData)) {
-					const currentRecord = currentDay.dailyReadData[fileId];
-					currentDay.dailyReadData[fileId] = currentRecord
-						? {...currentRecord, duration: Math.max(currentRecord.duration, incomingRecord.duration), openCount: Math.max(currentRecord.openCount, incomingRecord.openCount)}
-						: {...incomingRecord};
+			type Aggregate = {duration: number; count: number; fileId: string; filePath: string; first?: number; last?: number};
+			const uniqueSessions = (snapshot: PluginData): StudySession[] => {
+				const result = new Map<string, StudySession>();
+				for (const session of Object.values(snapshot.dailyData).flatMap(day => day.sessions)) {
+					const existing = result.get(session.id);
+					if (!existing || session.updatedAt > existing.updatedAt) result.set(session.id, {...session});
 				}
-				data.dailyData[date] = currentDay;
-			}
+				return [...result.values()];
+			};
+			const totalsFor = (sessions: StudySession[]) => {
+				const total = new Map<string, Aggregate>();
+				const daily = new Map<string, Map<string, Aggregate>>();
+				for (const session of sessions) {
+					const aggregate = total.get(session.fileId) ?? {duration: 0, count: 0, fileId: session.fileId, filePath: session.filePath, first: session.openedAt, last: session.openedAt};
+					aggregate.duration += session.duration;
+					aggregate.count++;
+					aggregate.filePath = session.filePath;
+					aggregate.first = Math.min(aggregate.first ?? session.openedAt, session.openedAt);
+					aggregate.last = Math.max(aggregate.last ?? session.openedAt, session.openedAt);
+					total.set(session.fileId, aggregate);
+					for (const slice of splitDurationByLocalDay(session.openedAt, session.duration)) {
+						const day = daily.get(slice.key) ?? new Map<string, Aggregate>();
+						const point = day.get(session.fileId) ?? {duration: 0, count: 0, fileId: session.fileId, filePath: session.filePath};
+						point.duration += slice.duration;
+						if (slice.key === localDateKey(session.openedAt)) point.count++;
+						day.set(session.fileId, point);
+						daily.set(slice.key, day);
+					}
+				}
+				return {total, daily};
+			};
+			const residualsFor = (snapshot: PluginData) => {
+				const sessionTotals = totalsFor(uniqueSessions(snapshot));
+				const total = new Map<string, Aggregate>();
+				for (const [path, record] of Object.entries(snapshot.readData)) {
+					const tracked = sessionTotals.total.get(record.fileId);
+					const residual: Aggregate = {
+						fileId: record.fileId,
+						filePath: record.filePath || path,
+						duration: Math.max(0, record.duration - (tracked?.duration ?? 0)),
+						count: Math.max(0, record.openCount - (tracked?.count ?? 0)),
+						...(record.firstOpenedAt !== undefined ? {first: record.firstOpenedAt} : {}),
+						...(record.lastOpenedAt !== undefined ? {last: record.lastOpenedAt} : {})
+					};
+					const existing = total.get(record.fileId);
+					if (!existing || residual.duration > existing.duration || residual.count > existing.count) total.set(record.fileId, residual);
+				}
+				const daily = new Map<string, Map<string, Aggregate>>();
+				for (const [date, day] of Object.entries(snapshot.dailyData)) {
+					const values = new Map<string, Aggregate>();
+					for (const [fileId, record] of Object.entries(day.dailyReadData)) {
+						const tracked = sessionTotals.daily.get(date)?.get(fileId);
+						values.set(fileId, {
+							fileId,
+							filePath: record.filePath || snapshot.readData[record.filePath]?.filePath || "",
+							duration: Math.max(0, record.duration - (tracked?.duration ?? 0)),
+							count: Math.max(0, record.openCount - (tracked?.count ?? 0))
+						});
+					}
+					daily.set(date, values);
+				}
+				return {total, daily};
+			};
+			const mergeAggregateMaps = (current: Map<string, Aggregate>, other: Map<string, Aggregate>, preferCurrent: boolean | undefined): Map<string, Aggregate> => {
+				const result = new Map<string, Aggregate>();
+				for (const key of new Set([...current.keys(), ...other.keys()])) {
+					const left = current.get(key);
+					const right = other.get(key);
+					if (!left && right) result.set(key, {...right});
+					else if (left && !right) result.set(key, {...left});
+					else if (left && right && preferCurrent !== undefined) result.set(key, {...(preferCurrent ? left : right)});
+					else if (left && right) result.set(key, {
+						fileId: key,
+						filePath: (right.last ?? 0) > (left.last ?? 0) ? right.filePath : left.filePath,
+						duration: Math.max(left.duration, right.duration),
+						count: Math.max(left.count, right.count),
+						...([left.first, right.first].filter((item): item is number => item !== undefined).length ? {first: Math.min(...[left.first, right.first].filter((item): item is number => item !== undefined))} : {}),
+						...(Math.max(left.last ?? 0, right.last ?? 0) > 0 ? {last: Math.max(left.last ?? 0, right.last ?? 0)} : {})
+					});
+				}
+				return result;
+			};
 
+			const originalEvents = data.eventLog.length;
+			const currentSessions = uniqueSessions(data);
+			const incomingSessions = uniqueSessions(incoming);
+			const originalSessions = currentSessions.length;
+			const originalProgress = data.progressEntries.length;
+			const currentResiduals = residualsFor(data);
+			const incomingResiduals = residualsFor(incoming);
+			const sameDevice = Boolean(data.deviceId && data.deviceId === incoming.deviceId);
+			const preferCurrent = sameDevice ? data.updatedAt >= incoming.updatedAt : undefined;
+			data.eventLog = mergeStudyEvents(data.eventLog, incoming.eventLog);
 			const sessions = new Map<string, StudySession>();
-			for (const session of [...Object.values(data.dailyData).flatMap(day => day.sessions), ...Object.values(incoming.dailyData).flatMap(day => day.sessions)]) {
+			for (const session of [...currentSessions, ...incomingSessions]) {
 				const existing = sessions.get(session.id);
 				if (!existing || session.updatedAt > existing.updatedAt) sessions.set(session.id, {...session});
 			}
@@ -567,9 +726,6 @@ export class PluginDataManager {
 					if (parsed) sessions.set(parsed.id, parsed);
 				}
 			}
-			for (const daily of Object.values(data.dailyData)) daily.sessions = [];
-			for (const session of sessions.values()) this.addSessionToDay(data, session);
-
 			const progress = new Map(data.progressEntries.map(entry => [entry.id, entry]));
 			for (const entry of incoming.progressEntries) {
 				const existing = progress.get(entry.id);
@@ -583,60 +739,91 @@ export class PluginDataManager {
 					if (parsed) progress.set(parsed.id, parsed);
 				}
 			}
+
+			const preferredPaths = new Map<string, {path: string; changedAt: number}>();
+			const considerPath = (fileId: string, path: string, changedAt: number) => {
+				if (!path) return;
+				const existing = preferredPaths.get(fileId);
+				if (!existing || changedAt >= existing.changedAt) preferredPaths.set(fileId, {path, changedAt});
+			};
+			for (const item of [...currentResiduals.total.values(), ...incomingResiduals.total.values()]) considerPath(item.fileId, item.filePath, item.last ?? 0);
+			for (const session of sessions.values()) considerPath(session.fileId, session.filePath, session.updatedAt);
+			for (const entry of progress.values()) considerPath(entry.fileId, entry.filePath, entry.updatedAt);
+			for (const event of data.eventLog) {
+				if (event.entity !== "note" || event.operation !== "rename") continue;
+				const payload = asObject(event.payload);
+				if (event.fileId && typeof payload?.newPath === "string") considerPath(event.fileId, payload.newPath, event.timestamp);
+			}
+			for (const session of sessions.values()) session.filePath = preferredPaths.get(session.fileId)?.path ?? session.filePath;
+			for (const entry of progress.values()) entry.filePath = preferredPaths.get(entry.fileId)?.path ?? entry.filePath;
 			data.progressEntries = [...progress.values()];
-			for (const [path, record] of Object.entries(incoming.readData)) {
-				const existing = data.readData[path];
-				if (!existing) data.readData[path] = {...record};
-				else {
-					const firstOpenedAt = [existing.firstOpenedAt, record.firstOpenedAt].filter((item): item is number => item !== undefined);
-					const lastOpenedAt = Math.max(existing.lastOpenedAt ?? 0, record.lastOpenedAt ?? 0);
-					data.readData[path] = {...existing, duration: Math.max(existing.duration, record.duration), openCount: Math.max(existing.openCount, record.openCount), ...(firstOpenedAt.length ? {firstOpenedAt: Math.min(...firstOpenedAt)} : {}), ...(lastOpenedAt ? {lastOpenedAt} : {})};
-				}
+
+			const mergedSessionTotals = totalsFor([...sessions.values()]);
+			const residualTotals = mergeAggregateMaps(currentResiduals.total, incomingResiduals.total, preferCurrent);
+			data.readData = {};
+			for (const fileId of new Set([...residualTotals.keys(), ...mergedSessionTotals.total.keys()])) {
+				const base = residualTotals.get(fileId);
+				const tracked = mergedSessionTotals.total.get(fileId);
+				const path = preferredPaths.get(fileId)?.path ?? tracked?.filePath ?? base?.filePath ?? "";
+				if (!path) continue;
+				const firstValues = [base?.first, tracked?.first].filter((item): item is number => item !== undefined);
+				const last = Math.max(base?.last ?? 0, tracked?.last ?? 0);
+				data.readData[path] = {
+					fileId,
+					filePath: path,
+					duration: (base?.duration ?? 0) + (tracked?.duration ?? 0),
+					openCount: (base?.count ?? 0) + (tracked?.count ?? 0),
+					...(firstValues.length ? {firstOpenedAt: Math.min(...firstValues)} : {}),
+					...(last > 0 ? {lastOpenedAt: last} : {})
+				};
 			}
-			const sessionTotals = new Map<string, {duration: number; count: number; fileId: string; first: number; last: number}>();
-			const dailySessionTotals = new Map<string, Map<string, {duration: number; count: number; filePath: string}>>();
-			for (const session of sessions.values()) {
-				const total = sessionTotals.get(session.filePath) ?? {duration: 0, count: 0, fileId: session.fileId, first: session.openedAt, last: session.openedAt};
-				total.duration += session.duration;
-				total.count += 1;
-				total.first = Math.min(total.first, session.openedAt);
-				total.last = Math.max(total.last, session.openedAt);
-				sessionTotals.set(session.filePath, total);
-				const date = dateKeyFromTimestamp(session.openedAt);
-				const dateTotals = dailySessionTotals.get(date) ?? new Map<string, {duration: number; count: number; filePath: string}>();
-				const dailyTotal = dateTotals.get(session.fileId) ?? {duration: 0, count: 0, filePath: session.filePath};
-				dailyTotal.duration += session.duration;
-				dailyTotal.count += 1;
-				dateTotals.set(session.fileId, dailyTotal);
-				dailySessionTotals.set(date, dateTotals);
-			}
-			for (const [path, total] of sessionTotals) {
-				const record = data.readData[path] ?? {fileId: total.fileId, filePath: path, duration: 0, openCount: 0};
-				record.duration = Math.max(record.duration, total.duration);
-				record.openCount = Math.max(record.openCount, total.count);
-				record.firstOpenedAt = Math.min(record.firstOpenedAt ?? total.first, total.first);
-				record.lastOpenedAt = Math.max(record.lastOpenedAt ?? total.last, total.last);
-				data.readData[path] = record;
-			}
-			for (const [date, totals] of dailySessionTotals) {
-				const day = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
-				for (const [fileId, total] of totals) {
-					const record = day.dailyReadData[fileId] ?? {fileId, filePath: total.filePath, duration: 0, openCount: 0};
-					record.duration = Math.max(record.duration, total.duration);
-					record.openCount = Math.max(record.openCount, total.count);
-					day.dailyReadData[fileId] = record;
+
+			data.dailyData = {};
+			const dates = new Set([...currentResiduals.daily.keys(), ...incomingResiduals.daily.keys(), ...mergedSessionTotals.daily.keys()]);
+			for (const date of dates) {
+				const residual = mergeAggregateMaps(currentResiduals.daily.get(date) ?? new Map<string, Aggregate>(), incomingResiduals.daily.get(date) ?? new Map<string, Aggregate>(), preferCurrent);
+				const tracked = mergedSessionTotals.daily.get(date) ?? new Map<string, Aggregate>();
+				const day: DailyReadData = {dailyReadData: {}, sessions: []};
+				for (const fileId of new Set([...residual.keys(), ...tracked.keys()])) {
+					const base = residual.get(fileId);
+					const sessionTotal = tracked.get(fileId);
+					const path = preferredPaths.get(fileId)?.path ?? sessionTotal?.filePath ?? base?.filePath ?? "";
+					day.dailyReadData[fileId] = {fileId, filePath: path, duration: (base?.duration ?? 0) + (sessionTotal?.duration ?? 0), openCount: (base?.count ?? 0) + (sessionTotal?.count ?? 0)};
 				}
 				data.dailyData[date] = day;
 			}
+			for (const session of sessions.values()) this.addSessionToDay(data, session);
 			return {eventsAdded: data.eventLog.length - originalEvents, sessionsAdded: Math.max(0, sessions.size - originalSessions), progressAdded: Math.max(0, data.progressEntries.length - originalProgress)};
 		});
 	}
 
-	public async importData(value: unknown): Promise<void> {
+	public async validateImport(value: unknown): Promise<void> {
 		const source = asObject(value);
-		if (!source || !asObject(source.readData) || !asObject(source.dailyData)) {
-			throw new Error("Invalid Study Time Statistics data snapshot");
+		const readData = asObject(source?.readData);
+		const dailyData = asObject(source?.dailyData);
+		if (!source || !readData || !dailyData) throw new Error("Invalid Study Time Statistics data snapshot");
+		if (Object.entries(readData).some(([path, record]) => parseReadRecord(record, path) === undefined)) {
+			throw new Error("Invalid Study Time Statistics read record");
 		}
+		for (const candidate of Object.values(dailyData)) {
+			const day = asObject(candidate);
+			const dailyRecords = asObject(day?.dailyReadData);
+			if (!day || !dailyRecords || !Array.isArray(day.sessions)) throw new Error("Invalid Study Time Statistics daily record");
+			if (Object.entries(dailyRecords).some(([path, record]) => parseReadRecord(record, path) === undefined)) {
+				throw new Error("Invalid Study Time Statistics daily note record");
+			}
+			if (day.sessions.some(session => parseStudySession(session) === undefined)) throw new Error("Invalid Study Time Statistics session");
+		}
+		if (source.progressEntries !== undefined && (!Array.isArray(source.progressEntries) || source.progressEntries.some(entry => parseProgressEntry(entry) === undefined))) {
+			throw new Error("Invalid Study Time Statistics progress record");
+		}
+		if (source.eventLog !== undefined && (!Array.isArray(source.eventLog) || source.eventLog.some(event => parseStudyEvent(event) === undefined))) {
+			throw new Error("Invalid Study Time Statistics event record");
+		}
+	}
+
+	public async importData(value: unknown): Promise<void> {
+		await this.validateImport(value);
 		const parsed = parsePluginData(value);
 		await this.mutate(data => {
 			data.dataVersion = parsed.dataVersion;
@@ -658,14 +845,14 @@ export class PluginDataManager {
 	}
 
 	private appendEvent(data: PluginData, entity: StudyEvent["entity"], entityId: string, operation: StudyEvent["operation"], fileId?: string, payload?: unknown): void {
-		data.deviceId ||= `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+		data.deviceId = this.runtimeDeviceId || data.deviceId || `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 		const lastTimestamp = data.eventLog[data.eventLog.length - 1]?.timestamp ?? 0;
 		const timestamp = Math.max(Date.now(), lastTimestamp + 1);
 		data.eventLog.push(createStudyEvent({deviceId: data.deviceId, timestamp, entity, entityId, operation, ...(fileId ? {fileId} : {}), ...(payload !== undefined ? {payload: structuredClone(payload)} : {})}));
 	}
 
 	private addSessionToDay(data: PluginData, session: StudySession): void {
-		const date = dateKeyFromTimestamp(session.openedAt);
+		const date = localDateKey(session.openedAt);
 		const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
 		daily.sessions.push({...session});
 		data.dailyData[date] = daily;
@@ -694,16 +881,18 @@ export class PluginDataManager {
 		}
 		data.readData[session.filePath] = total;
 
-		const date = dateKeyFromTimestamp(session.openedAt);
-		const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
-		const dailyRecord = daily.dailyReadData[session.fileId] ?? {
-			fileId: session.fileId,
-			filePath: "",
-			duration: 0,
-			openCount: 0
-		};
-		dailyRecord.duration = Math.max(0, dailyRecord.duration + direction * session.duration);
-		daily.dailyReadData[session.fileId] = dailyRecord;
-		data.dailyData[date] = daily;
+		for (const slice of splitDurationByLocalDay(session.openedAt, session.duration)) {
+			const daily = data.dailyData[slice.key] ?? {dailyReadData: {}, sessions: []};
+			const dailyRecord = daily.dailyReadData[session.fileId] ?? {
+				fileId: session.fileId,
+				filePath: session.filePath,
+				duration: 0,
+				openCount: 0
+			};
+			dailyRecord.filePath = session.filePath;
+			dailyRecord.duration = Math.max(0, dailyRecord.duration + direction * slice.duration);
+			daily.dailyReadData[session.fileId] = dailyRecord;
+			data.dailyData[slice.key] = daily;
+		}
 	}
 }

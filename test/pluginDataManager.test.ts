@@ -111,6 +111,34 @@ test("manual session create, edit, and delete keeps aggregates consistent", asyn
 	assert.equal(manager.getSessions().length, 0);
 });
 
+test("cross-midnight session corrections update every affected day", async () => {
+	const openedAt = new Date(2026, 8, 29, 23, 59, 30).getTime();
+	const {manager} = createManager({
+		readData: {"A.md": {fileId: "a", filePath: "A.md", duration: 0, openCount: 0}},
+		dailyData: {},
+		settings: {}
+	});
+	await manager.loadData();
+	const created = await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt, duration: 120_000});
+	assert.equal(manager.getDailyReadData("2026-9-29")?.dailyReadData.a?.duration, 30_000);
+	assert.equal(manager.getDailyReadData("2026-9-30")?.dailyReadData.a?.duration, 90_000);
+	await manager.deleteSession(created.id);
+	assert.equal(manager.getDailyReadData("2026-9-29")?.dailyReadData.a?.duration, 0);
+	assert.equal(manager.getDailyReadData("2026-9-30")?.dailyReadData.a?.duration, 0);
+});
+
+test("concurrent tracked-time increments are serialized without lost updates", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	const endedAt = new Date(2026, 8, 30, 12).getTime();
+	await Promise.all([
+		manager.addTrackedTime("A.md", "a", 2_000, endedAt),
+		manager.addTrackedTime("A.md", "a", 3_000, endedAt)
+	]);
+	assert.equal(manager.getReadRecord("A.md")?.duration, 5_000);
+	assert.equal(manager.getDailyReadData("2026-9-30")?.dailyReadData.a?.duration, 5_000);
+});
+
 test("completed automatic sessions do not double-count time already tracked", async () => {
 	const {manager} = createManager({
 		readData: {"A.md": {fileId: "a", filePath: "A.md", duration: 6_000, openCount: 1}},
@@ -176,6 +204,44 @@ test("3.0 events preserve engagement changes and renamed paths after merge", asy
 	await manager.mergeData(manager.exportData());
 	assert.equal(manager.getSession(session.id)?.engagement, "quiet-study");
 	assert.equal(manager.getSession(session.id)?.filePath, "Renamed.md");
+});
+
+test("3.0 merge keeps deleted sessions deleted without residual totals", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	await manager.ensureDeviceId();
+	const openedAt = new Date(2026, 8, 1, 10).getTime();
+	const session = await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt, duration: 10 * 60_000});
+	const oldSnapshot = manager.exportData();
+	await manager.deleteSession(session.id);
+	await manager.mergeData(oldSnapshot);
+	assert.equal(manager.getSessions().length, 0);
+	assert.equal(manager.getReadRecord("A.md")?.duration, 0);
+	assert.equal(manager.getDailyReadData("2026-9-1")?.dailyReadData.a?.duration, 0);
+});
+
+test("3.0 merge accepts the plugin's own backup wrapper", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	await manager.ensureDeviceId();
+	await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt: 1_000, duration: 500});
+	const snapshot = manager.exportData();
+	const result = await manager.mergeData({format: "study-time-statistics-backup", version: 1, createdAt: 2_000, pluginData: snapshot});
+	assert.equal(result.sessionsAdded, 0);
+	assert.equal(manager.getSessions().length, 1);
+});
+
+test("3.0 merge does not resurrect a path from before a rename", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	await manager.ensureDeviceId();
+	await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt: 1_000, duration: 500});
+	const oldSnapshot = manager.exportData();
+	await manager.renameFilePath("A.md", "Renamed.md");
+	await manager.mergeData(oldSnapshot);
+	assert.equal(manager.getReadRecord("A.md"), undefined);
+	assert.equal(manager.getReadRecord("Renamed.md")?.duration, 500);
+	assert.equal(manager.getSessions()[0]?.filePath, "Renamed.md");
 });
 
 test("serialized mutations do not lose concurrently added sessions", async () => {

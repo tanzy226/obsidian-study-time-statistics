@@ -12,6 +12,7 @@ test("tracking precision settings are clamped to safe ranges", () => {
 test("idle detection and minimum session rules preserve quiet study", () => {
 	assert.equal(isIdle(0, 19 * 60_000, 20), false);
 	assert.equal(isIdle(0, 20 * 60_000, 20), true);
+	assert.equal(isIdle(0, 24 * 60 * 60_000, 0), false);
 	assert.equal(shouldKeepSession(session(4_999), 5), false);
 	assert.equal(shouldKeepSession(session(1, "manual"), 5), true);
 });
