@@ -36,41 +36,45 @@ export function StatisticsView(props: StatisticsViewProps) {
 	const [yearlyStats, setYearlyStats] = React.useState<YearlyStats | null>(null);
 	const [totalStats, setTotalStats] = React.useState<TotalStats | null>(null);
 	const [recentYearsData, setRecentYearsData] = React.useState<Array<{ year: number; totalDuration: number; focusDays: number; noteCount: number }>>([]);
+	const requestRef = React.useRef(0);
 	React.useEffect(() => {
-		void loadData();
+		const request = ++requestRef.current;
+		void loadData(request);
+		return () => { requestRef.current += 1; };
 	}, [viewMode, currentDate]);
 
-	const loadData = async () => {
+	const loadData = async (request: number) => {
 		setIsLoading(true);
 		try {
 			if (viewMode === 'day') {
 				const date = `${currentDate.getFullYear()}-${currentDate.getMonth() + 1}-${currentDate.getDate()}`;
 				const stats = await plugin.focusDataAggregator.getDailyStats(date);
-				setDailyStats(stats);
+				if (request === requestRef.current) setDailyStats(stats);
 			} else if (viewMode === 'week') {
 				const stats = await plugin.focusDataAggregator.getWeeklyStats(currentDate);
-				setWeeklyStats(stats);
+				if (request === requestRef.current) setWeeklyStats(stats);
 			} else if (viewMode === 'month') {
 				const stats = await plugin.focusDataAggregator.getMonthlyStats(
 					currentDate.getFullYear(),
 					currentDate.getMonth() + 1
 				);
-				setMonthlyStats(stats);
+				if (request === requestRef.current) setMonthlyStats(stats);
 			} else if (viewMode === 'year') {
 				const stats = await plugin.focusDataAggregator.getYearlyStats(currentDate.getFullYear());
-				setYearlyStats(stats);
+				if (request === requestRef.current) setYearlyStats(stats);
 			} else if (viewMode === 'total') {
-				const stats = await plugin.focusDataAggregator.getTotalStats();
-				setTotalStats(stats);
-				const yearsData = await plugin.focusDataAggregator.getRecentYearsStats();
-				setRecentYearsData(yearsData);
+				const overview = await plugin.focusDataAggregator.getTotalOverview();
+				if (request === requestRef.current) {
+					setTotalStats(overview.total);
+					setRecentYearsData(overview.recentYears);
+				}
 			}
 		} catch (error) {
 			console.error('Failed to load statistics:', error);
 		} finally {
-			setIsLoading(false);
-			if (isInitialLoad) {
-				setIsInitialLoad(false);
+			if (request === requestRef.current) {
+				setIsLoading(false);
+				if (isInitialLoad) setIsInitialLoad(false);
 			}
 		}
 	};
@@ -112,6 +116,9 @@ export function StatisticsView(props: StatisticsViewProps) {
 								key={note.fileId}
 								className="stats-note-item stats-note-clickable"
 								onClick={() => handleNoteClick(note.filePath)}
+								onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') handleNoteClick(note.filePath); }}
+								role="button"
+								tabIndex={0}
 								title={note.filePath}
 							>
 								<div className="stats-note-left">
@@ -219,6 +226,9 @@ export function StatisticsView(props: StatisticsViewProps) {
 								key={note.fileId}
 								className="stats-note-item stats-note-clickable"
 								onClick={() => handleNoteClick(note.filePath)}
+								onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') handleNoteClick(note.filePath); }}
+								role="button"
+								tabIndex={0}
 								title={note.filePath}
 							>
 								<div className="stats-note-left">
@@ -351,7 +361,7 @@ export function StatisticsView(props: StatisticsViewProps) {
 		if (!totalStats) return null;
 
 		const currentYear = new Date().getFullYear();
-		const startYear = currentYear - 9;
+		const startYear = recentYearsData[0]?.year ?? currentYear;
 		const yearDataMap: { [key: number]: number } = {};
 
 		for (let year = startYear; year <= currentYear; year++) {
@@ -384,7 +394,6 @@ export function StatisticsView(props: StatisticsViewProps) {
 						<BarChart
 							data={yearChartData}
 							height={250}
-							maxBars={10}
 							onBarClick={(label) => {
 								const year = parseInt(label);
 								const newDate = new Date(year, 0, 1);

@@ -52,6 +52,7 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 		this.dailyReadDataManager = new DailyReadDataManager(this._dataManager);
 
 		await this.dataManager.loadData();
+		this.applyVisualizationAppearance();
 		this.init();
 
 	}
@@ -59,6 +60,15 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 	onunload() {
 		this.timeTracker?.unload();
 		this.noteStatsBarManager?.unload();
+		document.body.style.removeProperty("--sts-viz-base");
+	}
+
+	public applyVisualizationAppearance(): void {
+		const appearance = this.dataManager.getVisualizationAppearance();
+		document.body.style.setProperty(
+			"--sts-viz-base",
+			appearance.colorMode === "custom" ? appearance.customColor : "var(--interactive-accent)"
+		);
 	}
 
 	/**
@@ -76,7 +86,10 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 		this.addSettingTab(new StudyTimeStatisticsSettingTab(this.app, this));
 		RibbonFactory.createLeaderboardRibbon(this, this.app);
 		this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
-			if (file instanceof TFile) void this._dataManager.renameFilePath(oldPath, file.path);
+			if (file instanceof TFile) {
+				this.timeTracker?.handleFileRename(oldPath, file.path);
+				void this._dataManager.renameFilePath(oldPath, file.path);
+			}
 		}));
 
 		// Init commands

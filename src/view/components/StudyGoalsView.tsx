@@ -24,8 +24,13 @@ export function StudyGoalsView({plugin, onSelect}: Props) {
 	const [daily, setDaily] = React.useState(initial.dailyMinutes);
 	const [weekly, setWeekly] = React.useState(initial.weeklyMinutes);
 	const [revision, setRevision] = React.useState(0);
+	React.useEffect(() => plugin.dataManager.onDidChange(() => setRevision(value => value + 1)), [plugin]);
 	const sessions = plugin.dataManager.getSessions();
-	const summary = buildStudyGoalSummary(sessions, {dailyMinutes: daily, weeklyMinutes: weekly});
+	const recordedDurations = Object.fromEntries(Object.entries(plugin.dataManager.getAllDailyReadData()).map(([date, day]) => [
+		date,
+		Object.values(day.dailyReadData).reduce((sum, record) => sum + Math.max(0, record.duration), 0)
+	]));
+	const summary = buildStudyGoalSummary(sessions, {dailyMinutes: daily, weeklyMinutes: weekly}, new Date(), recordedDurations);
 
 	const saveGoals = async () => {
 		await plugin.dataManager.setStudyGoals(daily, weekly);
