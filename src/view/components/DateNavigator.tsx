@@ -6,25 +6,41 @@ interface DateNavigatorProps {
 	onDateChange: (date: Date) => void;
 }
 
+export function moveMonth(date: Date, amount: number): Date {
+	const target = new Date(date);
+	const originalDay = target.getDate();
+	target.setDate(1);
+	target.setMonth(target.getMonth() + amount);
+	const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+	target.setDate(Math.min(originalDay, lastDay));
+	return target;
+}
+
+export function moveYear(date: Date, amount: number): Date {
+	const targetYear = date.getFullYear() + amount;
+	const lastDay = new Date(targetYear, date.getMonth() + 1, 0).getDate();
+	return new Date(targetYear, date.getMonth(), Math.min(date.getDate(), lastDay), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
+}
+
 export function DateNavigator(props: DateNavigatorProps) {
 	const { viewType, currentDate, onDateChange } = props;
 
 	const handlePrevious = () => {
-		const newDate = new Date(currentDate);
+		let newDate = new Date(currentDate);
 		if (viewType === 'day') {
 			newDate.setDate(newDate.getDate() - 1);
 		} else if (viewType === 'week') {
 			newDate.setDate(newDate.getDate() - 7);
 		} else if (viewType === 'month') {
-			newDate.setMonth(newDate.getMonth() - 1);
+			newDate = moveMonth(newDate, -1);
 		} else if (viewType === 'year') {
-			newDate.setFullYear(newDate.getFullYear() - 1);
+			newDate = moveYear(newDate, -1);
 		}
 		onDateChange(newDate);
 	};
 
 	const handleNext = () => {
-		const newDate = new Date(currentDate);
+		let newDate = new Date(currentDate);
 		const today = new Date();
 
 		if (viewType === 'day') {
@@ -43,13 +59,13 @@ export function DateNavigator(props: DateNavigatorProps) {
 				return;
 			}
 		} else if (viewType === 'month') {
-			newDate.setMonth(newDate.getMonth() + 1);
+			newDate = moveMonth(newDate, 1);
 			const nextMonthStart = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
 			if (nextMonthStart > today) {
 				return;
 			}
 		} else if (viewType === 'year') {
-			newDate.setFullYear(newDate.getFullYear() + 1);
+			newDate = moveYear(newDate, 1);
 			const nextYearStart = new Date(currentDate.getFullYear() + 1, 0, 1);
 			if (nextYearStart > today) {
 				return;
