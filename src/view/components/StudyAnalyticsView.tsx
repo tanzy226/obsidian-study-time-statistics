@@ -184,10 +184,10 @@ function Heatmap({points}: {points: Array<{date: string; totalTime: number; sess
 		const element = scrollRef.current;
 		if (element) element.scrollLeft = element.scrollWidth;
 	}, [points.length]);
-	return <div className="study-heatmap" ref={scrollRef} aria-label={I18n.t("heatmapAriaLabel")}>{points.map(point => {
+	return <><div className="study-heatmap" ref={scrollRef} aria-label={I18n.t("heatmapAriaLabel")}>{points.map(point => {
 		const level = adaptiveLevel(values, point.totalTime);
 		return <div key={point.date} className={`study-heatmap-cell level-${level}`} title={`${point.date} · ${I18n.t("times", {count: point.sessionCount})} · ${TimeUtils.getPreciseFormattedReadingTime(point.totalTime)}`} />;
-	})}</div>;
+	})}</div><div className="study-heatmap-legend"><span>{I18n.t("heatmapLess")}</span><span className="study-heatmap-cell level-1" /><span className="study-heatmap-cell level-2" /><span className="study-heatmap-cell level-3" /><span className="study-heatmap-cell level-4" /><span className="study-heatmap-cell level-5" /><span>{I18n.t("heatmapMore")}</span></div></>;
 }
 
 function RankingCard({title, rows, value, onSelect}: {title: string; rows: NoteStudyRow[]; value: (row: NoteStudyRow) => string; onSelect: (path: string) => void}) {

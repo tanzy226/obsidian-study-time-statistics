@@ -16,3 +16,8 @@ test("identified reports aggregate sessions by note", () => {
 	const report = buildStudyReport([session("1", "Example.md", 10, 100), session("2", "Example.md", 20, 200)], {startAt: 0, endAt: 500, anonymize: false}, 600);
 	assert.deepEqual(report.rows[0], {note: "Example.md", duration: 300, sessions: 2, averageDuration: 150});
 });
+
+test("identified CSV reports neutralize spreadsheet formulas", () => {
+	const report = buildStudyReport([session("1", "=HYPERLINK(\"https://example.invalid\")", 10, 100)], {startAt: 0, endAt: 200, anonymize: false}, 300);
+	assert.match(reportToCsv(report), /\n"'=HYPERLINK/u);
+});

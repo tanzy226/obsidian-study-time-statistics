@@ -10,7 +10,7 @@ import StudyTimeStatisticsPlugin from "../main";
 import {Context} from "../context/context";
 import {createSessionId} from "../util/sessionUtils";
 import {classifySessionEngagement} from "../util/activityClassifier";
-import {isIdle, shouldKeepSession} from "../util/trackingPrecision";
+import {isIdle} from "../util/trackingPrecision";
 
 export class TimeTracker {
 	private readonly app: App;
@@ -23,6 +23,7 @@ export class TimeTracker {
 	private currentSession: StudySession | null = null;
 	private operationQueue: Promise<void> = Promise.resolve();
 	private lastInteractionRecordedAt = 0;
+	private focusRevision = 0;
 
 	constructor(plugin: StudyTimeStatisticsPlugin, app: App, dataManager: PluginDataManager, dailyReadDataManager: DailyReadDataManager) {
 		this.app = app;
@@ -117,14 +118,16 @@ export class TimeTracker {
 	}
 
 	private handleWindowFocus() {
+		this.focusRevision += 1;
 		this.windowFocus = true;
 		this.lastRefreshAt = Date.now();
 	}
 
 	private handleWindowBlur() {
+		const revision = ++this.focusRevision;
 		void this.enqueue(async () => {
 			await this.flushElapsed();
-			this.windowFocus = false;
+			if (revision === this.focusRevision) this.windowFocus = false;
 		});
 	}
 
@@ -135,50 +138,12 @@ export class TimeTracker {
 		const currentFile = Context.getCurrentFile();
 		if (!currentFile || this.needSuspendTimer() || elapsed < 1) return;
 
-		const dailyData = await this.dailyReadDataManager.loadTodayData();
 		const fileId = this.getFileId(currentFile.path);
 		if (!fileId) return;
-		const todayReadData = dailyData.dailyReadData?.[fileId];
-		await this.saveDailyReadData(currentFile, (todayReadData?.duration || 0) + elapsed);
-		await this.dataManager.loadData();
-		const totalReadData = this.getTotalReadData(currentFile);
-		await this.saveTotalReadData(
-			currentFile,
-			(totalReadData?.duration || 0) + elapsed,
-			totalReadData?.openCount || 1
-		);
+		await this.dataManager.addTrackedTime(currentFile.path, fileId, elapsed, now);
 		if (this.currentSession && this.currentSession.filePath === currentFile.path) {
 			this.currentSession.duration += elapsed;
 		}
-	}
-
-	public async saveDailyReadData(file: TFile, duration: number) {
-		const readRecord: ReadRecord = this.buildReadData(file, duration, 0, true);
-		await this.dailyReadDataManager.saveTodayData(readRecord);
-	}
-
-	public async saveTotalReadData(file: TFile, duration: number, openCount: number) {
-		const readRecord: ReadRecord = this.buildReadData(file, duration, openCount, false);
-		await this.dataManager.setReadRecord(readRecord.filePath, readRecord);
-	}
-
-	private buildReadData(file: TFile, duration: number, openCount: number, isDailyData: boolean): ReadRecord {
-		if (isDailyData) {
-			return {
-				filePath: "",
-				openCount: 0,
-				fileId: this.getFileId(file.path) ?? this.getOrCreateFileId(file.path),
-				duration
-			};
-		}
-		return {
-			fileId: this.getOrCreateFileId(file.path),
-			filePath: file.path,
-			duration,
-			openCount,
-			firstOpenedAt: this.dataManager.getReadRecord(file.path)?.firstOpenedAt,
-			lastOpenedAt: this.dataManager.getReadRecord(file.path)?.lastOpenedAt
-		};
 	}
 
 	private getOrCreateFileId(filePath: string): string {
@@ -191,18 +156,12 @@ export class TimeTracker {
 	}
 
 	private async incTotalReadCount(file: TFile): Promise<ReadRecord> {
-		await this.dataManager.loadData();
-		const totalReadData = this.getTotalReadData(file);
-		const totalRecord = this.buildReadData(
-			file,
-			totalReadData?.duration || 0,
-			(totalReadData?.openCount || 0) + 1,
-			false
-		);
-		totalRecord.firstOpenedAt ||= Date.now();
-		totalRecord.lastOpenedAt = Date.now();
-		await this.dataManager.setReadRecord(totalRecord.filePath, totalRecord);
-		return totalRecord;
+		const openedAt = Date.now();
+		return this.dataManager.recordFileOpened(file.path, this.getOrCreateFileId(file.path), openedAt);
+	}
+
+	public handleFileRename(oldPath: string, newPath: string): void {
+		if (this.currentSession?.filePath === oldPath) this.currentSession.filePath = newPath;
 	}
 
 	private async finishCurrentSession() {
@@ -215,9 +174,7 @@ export class TimeTracker {
 			engagement: classifySessionEngagement(this.currentSession)
 		};
 		this.currentSession = null;
-		if (shouldKeepSession(session, this.dataManager.getTrackingPrecision().minimumSessionSeconds)) {
-			await this.dailyReadDataManager.saveSession(session);
-		}
+		await this.dailyReadDataManager.saveSession(session);
 	}
 
 	public getTotalReadData(file: TFile): ReadRecord | undefined {
