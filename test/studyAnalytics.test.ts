@@ -84,3 +84,18 @@ test("buildStudyAnalytics handles an empty vault", () => {
 	assert.equal(result.weekdays.length, 7);
 	assert.equal(result.sessionBuckets.length, 6);
 });
+
+test("hourly and weekday duration split at local time boundaries", () => {
+	const openedAt = new Date(2026, 8, 29, 23, 50).getTime();
+	const result = buildStudyAnalytics(
+		[{fileId: "a", filePath: "A.md", duration: 30 * 60_000, openCount: 1}],
+		[],
+		[session("late", "a", "A.md", openedAt, 30 * 60_000)],
+		new Date(2026, 8, 30, 1)
+	);
+	assert.equal(result.hourly[23].duration, 10 * 60_000);
+	assert.equal(result.hourly[0].duration, 20 * 60_000);
+	assert.equal(result.hourly[23].count, 1);
+	assert.equal(result.hourly[0].count, 0);
+	assert.equal(result.rankings.byActiveDays[0].activeDays, 2);
+});

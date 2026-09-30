@@ -1,12 +1,12 @@
-import { App } from "obsidian";
-import { PluginDataManager } from "./pluginDataManager";
-import { DailyReadDataManager } from "./dailyReadDataManager";
+import type {App} from "obsidian";
+import {DailyReadData, PluginDataManager} from "./pluginDataManager";
+import type {DailyReadDataManager} from "./dailyReadDataManager";
 
 export interface DailyStats {
 	date: string;
 	noteCount: number;
 	totalDuration: number;
-	notes: Array<{ filePath: string; fileId: string; duration: number }>;
+	notes: Array<{filePath: string; fileId: string; duration: number}>;
 }
 
 export interface MonthlyStats {
@@ -41,240 +41,154 @@ export interface TotalStats {
 	focusDays: number;
 }
 
+export interface TotalOverview {
+	total: TotalStats;
+	recentYears: Array<{year: number; totalDuration: number; focusDays: number; noteCount: number}>;
+}
+
+function dateKey(date: Date): string {
+	return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
+function normalizeDateKey(value: string): string {
+	const [year, month, day] = value.split("-").map(Number);
+	return Number.isFinite(year) && Number.isFinite(month) && Number.isFinite(day)
+		? `${year}-${month}-${day}`
+		: value;
+}
+
 export class FocusDataAggregator {
-	private readonly app: App;
-	private readonly dataManager: PluginDataManager;
-	private readonly dailyReadDataManager: DailyReadDataManager;
+	constructor(
+		_app: App,
+		private readonly dataManager: PluginDataManager,
+		_dailyReadDataManager: DailyReadDataManager
+	) {}
 
-	constructor(app: App, dataManager: PluginDataManager, dailyReadDataManager: DailyReadDataManager) {
-		this.app = app;
-		this.dataManager = dataManager;
-		this.dailyReadDataManager = dailyReadDataManager;
+	private snapshot(): {daily: Map<string, DailyReadData>; paths: Map<string, string>} {
+		const daily = new Map<string, DailyReadData>();
+		for (const [date, value] of Object.entries(this.dataManager.getAllDailyReadData())) {
+			daily.set(normalizeDateKey(date), value);
+		}
+		const paths = new Map<string, string>();
+		for (const [path, record] of Object.entries(this.dataManager.getReadData())) paths.set(record.fileId, path);
+		return {daily, paths};
 	}
 
-	/**
-	 * Get statistics for a specific date
-	 */
-	async getDailyStats(date: string): Promise<DailyStats | null> {
-		const dailyData = await this.dailyReadDataManager.loadDailyData(date);
-
-		if (!dailyData || !dailyData.dailyReadData) {
-			return null;
-		}
-
-		const readData = dailyData.dailyReadData;
-		const notes: Array<{ filePath: string; fileId: string; duration: number }> = [];
+	private dailyStats(date: string, snapshot: ReturnType<FocusDataAggregator["snapshot"]>): DailyStats {
+		const normalizedDate = normalizeDateKey(date);
+		const data = snapshot.daily.get(normalizedDate);
+		if (!data) return {date: normalizedDate, noteCount: 0, totalDuration: 0, notes: []};
+		const notes: DailyStats["notes"] = [];
 		let totalDuration = 0;
-
-		const totalReadData = this.dataManager.getReadData();
-
-			for (const fileId in readData) {
-				const record = readData[fileId];
-				if (!record) continue;
-
-			let filePath = "";
-				for (const path in totalReadData) {
-					const totalRecord = totalReadData[path];
-					if (totalRecord?.fileId === fileId) {
-							filePath = path;
-							break;
-					}
-				}
-
-			// Skip deleted files
-			if (!filePath) {
-				continue;
-			}
-
-			const file = this.app.vault.getFileByPath(filePath);
-			if (!file) {
-				continue; // File was deleted
-			}
-
-			totalDuration += record.duration;
-			notes.push({
-				filePath: filePath,
-				fileId: fileId,
-				duration: record.duration
-			});
+		for (const [fileId, record] of Object.entries(data.dailyReadData)) {
+			const duration = Math.max(0, record.duration);
+			totalDuration += duration;
+			const filePath = record.filePath || snapshot.paths.get(fileId) || "";
+			if (filePath) notes.push({filePath, fileId, duration});
 		}
-
-		return {
-			date,
-			noteCount: notes.length,
-			totalDuration,
-			notes
-		};
+		return {date: normalizedDate, noteCount: notes.length, totalDuration, notes};
 	}
 
-	/**
-	 * Get statistics for a specific month
-	 */
-	async getMonthlyStats(year: number, month: number): Promise<MonthlyStats> {
-		const daysInMonth = new Date(year, month, 0).getDate();
+	private monthlyStats(year: number, month: number, snapshot: ReturnType<FocusDataAggregator["snapshot"]>): MonthlyStats {
 		const dailyStats: DailyStats[] = [];
+		const notes = new Set<string>();
 		let totalDuration = 0;
-		let focusDays = 0;
-		const noteSet = new Set<string>();
-
-		for (let day = 1; day <= daysInMonth; day++) {
-			const date = `${year}-${month}-${day}`;
-			const dayStats = await this.getDailyStats(date);
-
-			if (dayStats && dayStats.totalDuration > 0) {
-				dailyStats.push(dayStats);
-				totalDuration += dayStats.totalDuration;
-				focusDays++;
-				dayStats.notes.forEach(note => noteSet.add(note.fileId));
-			}
+		for (let day = 1; day <= new Date(year, month, 0).getDate(); day++) {
+			const stats = this.dailyStats(`${year}-${month}-${day}`, snapshot);
+			if (stats.totalDuration <= 0) continue;
+			dailyStats.push(stats);
+			totalDuration += stats.totalDuration;
+			for (const note of stats.notes) notes.add(note.fileId);
 		}
-
-		return {
-			year,
-			month,
-			noteCount: noteSet.size,
-			totalDuration,
-			focusDays,
-			dailyStats
-		};
+		return {year, month, noteCount: notes.size, totalDuration, focusDays: dailyStats.length, dailyStats};
 	}
 
-	/**
-	 * Get statistics for a specific week
-	 */
-	async getWeeklyStats(date: Date): Promise<WeeklyStats> {
-		const startOfWeek = new Date(date);
-		const day = startOfWeek.getDay(); // 0 is Sunday
-		const diff = startOfWeek.getDate() - day; // Adjust to Sunday
-		startOfWeek.setDate(diff);
-
-		const dailyStats: DailyStats[] = [];
-		let totalDuration = 0;
-		let focusDays = 0;
-		const noteSet = new Set<string>();
-
-		const currentDay = new Date(startOfWeek);
-		for (let i = 0; i < 7; i++) {
-			const dateStr = `${currentDay.getFullYear()}-${currentDay.getMonth() + 1}-${currentDay.getDate()}`;
-			const dayStats = await this.getDailyStats(dateStr);
-
-			if (dayStats && dayStats.totalDuration > 0) {
-				dailyStats.push(dayStats);
-				totalDuration += dayStats.totalDuration;
-				focusDays++;
-				dayStats.notes.forEach(note => noteSet.add(note.fileId));
-			}
-
-			currentDay.setDate(currentDay.getDate() + 1);
-		}
-
-		const endDate = new Date(startOfWeek);
-		endDate.setDate(endDate.getDate() + 6);
-
-		return {
-			startDate: `${startOfWeek.getFullYear()}-${startOfWeek.getMonth() + 1}-${startOfWeek.getDate()}`,
-			endDate: `${endDate.getFullYear()}-${endDate.getMonth() + 1}-${endDate.getDate()}`,
-			noteCount: noteSet.size,
-			totalDuration,
-			focusDays,
-			dailyStats
-		};
-	}
-
-	/**
-	 * Get statistics for a specific year
-	 */
-	async getYearlyStats(year: number): Promise<YearlyStats> {
+	private yearlyStats(year: number, snapshot: ReturnType<FocusDataAggregator["snapshot"]>): YearlyStats {
 		const monthlyStats: MonthlyStats[] = [];
+		const notes = new Set<string>();
 		let totalDuration = 0;
 		let focusDays = 0;
-		const noteSet = new Set<string>();
-
 		for (let month = 1; month <= 12; month++) {
-			const monthStats = await this.getMonthlyStats(year, month);
-
-			if (monthStats.totalDuration > 0) {
-				monthlyStats.push(monthStats);
-				totalDuration += monthStats.totalDuration;
-				focusDays += monthStats.focusDays;
-				// Collect unique notes across all days in the month
-				monthStats.dailyStats.forEach(dayStats => {
-					dayStats.notes.forEach(note => noteSet.add(note.fileId));
-				});
-			}
+			const stats = this.monthlyStats(year, month, snapshot);
+			if (stats.totalDuration <= 0) continue;
+			monthlyStats.push(stats);
+			totalDuration += stats.totalDuration;
+			focusDays += stats.focusDays;
+			for (const day of stats.dailyStats) for (const note of day.notes) notes.add(note.fileId);
 		}
-
-		return {
-			year,
-			noteCount: noteSet.size,
-			totalDuration,
-			focusDays,
-			monthlyStats
-		};
+		return {year, noteCount: notes.size, totalDuration, focusDays, monthlyStats};
 	}
 
-	/**
-	 * Get statistics for recent years (last 10 years)
-	 */
-	async getRecentYearsStats(): Promise<Array<{ year: number; totalDuration: number; focusDays: number; noteCount: number }>> {
-		const currentYear = new Date().getFullYear();
-		const startYear = currentYear - 9; // Last 10 years
-		const yearlyData: Array<{ year: number; totalDuration: number; focusDays: number; noteCount: number }> = [];
-
-		for (let year = startYear; year <= currentYear; year++) {
-			try {
-				const stats = await this.getYearlyStats(year);
-				if (stats.totalDuration > 0 || year === currentYear) {
-					yearlyData.push({
-						year,
-						totalDuration: stats.totalDuration,
-						focusDays: stats.focusDays,
-						noteCount: stats.noteCount
-					});
-				}
-			} catch (error) {
-				console.error(`Failed to get yearly stats for ${year}:`, error);
-				yearlyData.push({
-					year,
-					totalDuration: 0,
-					focusDays: 0,
-					noteCount: 0
-				});
-			}
-		}
-
-		return yearlyData;
+	public async getDailyStats(date: string): Promise<DailyStats> {
+		await this.dataManager.loadData();
+		const snapshot = this.snapshot();
+		return this.dailyStats(date, snapshot);
 	}
 
-	/**
-	 * Get total statistics
-	 */
-	async getTotalStats(): Promise<TotalStats> {
-		const dates = await this.dailyReadDataManager.listDates();
+	public async getMonthlyStats(year: number, month: number): Promise<MonthlyStats> {
+		await this.dataManager.loadData();
+		const snapshot = this.snapshot();
+		return this.monthlyStats(year, month, snapshot);
+	}
 
-		const noteSet = new Set<string>();
+	public async getWeeklyStats(date: Date): Promise<WeeklyStats> {
+		await this.dataManager.loadData();
+		const snapshot = this.snapshot();
+		const start = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+		start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+		const end = new Date(start);
+		end.setDate(end.getDate() + 6);
+		const dailyStats: DailyStats[] = [];
+		const notes = new Set<string>();
+		let totalDuration = 0;
+		for (let offset = 0; offset < 7; offset++) {
+			const day = new Date(start);
+			day.setDate(day.getDate() + offset);
+			const stats = this.dailyStats(dateKey(day), snapshot);
+			if (stats.totalDuration <= 0) continue;
+			dailyStats.push(stats);
+			totalDuration += stats.totalDuration;
+			for (const note of stats.notes) notes.add(note.fileId);
+		}
+		return {startDate: dateKey(start), endDate: dateKey(end), noteCount: notes.size, totalDuration, focusDays: dailyStats.length, dailyStats};
+	}
+
+	public async getYearlyStats(year: number): Promise<YearlyStats> {
+		await this.dataManager.loadData();
+		const snapshot = this.snapshot();
+		return this.yearlyStats(year, snapshot);
+	}
+
+	public async getTotalOverview(now = new Date()): Promise<TotalOverview> {
+		await this.dataManager.loadData();
+		const snapshot = this.snapshot();
+		const notes = new Set<string>();
 		let totalDuration = 0;
 		let focusDays = 0;
-
-		for (const date of dates) {
-			try {
-				const dayStats = await this.getDailyStats(date);
-				if (dayStats && dayStats.totalDuration > 0) {
-					totalDuration += dayStats.totalDuration;
-					focusDays++;
-					// Only add notes that still exist (getDailyStats already filters deleted files)
-					dayStats.notes.forEach(note => noteSet.add(note.fileId));
-				}
-			} catch (error) {
-				console.error(`Failed to process daily stats for ${date}:`, error);
-				continue;
+		for (const date of snapshot.daily.keys()) {
+			const stats = this.dailyStats(date, snapshot);
+			if (stats.totalDuration <= 0) continue;
+			totalDuration += stats.totalDuration;
+			focusDays++;
+			for (const note of stats.notes) notes.add(note.fileId);
+		}
+		const storedYears = [...snapshot.daily.keys()].map(date => Number(date.split("-")[0])).filter(year => Number.isInteger(year) && year >= 1970 && year <= now.getFullYear());
+		const firstYear = storedYears.length > 0 ? Math.min(...storedYears) : now.getFullYear();
+		const recentYears: TotalOverview["recentYears"] = [];
+		for (let year = firstYear; year <= now.getFullYear(); year++) {
+			const stats = this.yearlyStats(year, snapshot);
+			if (stats.totalDuration > 0 || year === now.getFullYear()) {
+				recentYears.push({year, totalDuration: stats.totalDuration, focusDays: stats.focusDays, noteCount: stats.noteCount});
 			}
 		}
+		return {total: {noteCount: notes.size, totalDuration, focusDays}, recentYears};
+	}
 
-		return {
-			noteCount: noteSet.size,
-			totalDuration,
-			focusDays
-		};
+	public async getRecentYearsStats(): Promise<TotalOverview["recentYears"]> {
+		return (await this.getTotalOverview()).recentYears;
+	}
+
+	public async getTotalStats(): Promise<TotalStats> {
+		return (await this.getTotalOverview()).total;
 	}
 }
