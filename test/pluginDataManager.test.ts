@@ -301,6 +301,11 @@ test("invalid imports are rejected without replacing current data", async () => 
 	});
 	await manager.loadData();
 	await assert.rejects(manager.importData({unexpected: true}));
+	await assert.rejects(manager.importData({
+		readData: {},
+		dailyData: {},
+		eventLog: [{id: "bad", deviceId: "device", timestamp: 1, entity: "session", entityId: "s", operation: "upsert", payload: {broken: true}}]
+	}));
 	assert.equal(manager.getReadRecord("A.md")?.duration, 4_000);
 });
 

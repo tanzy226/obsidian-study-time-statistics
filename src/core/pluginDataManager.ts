@@ -858,8 +858,18 @@ export class PluginDataManager {
 		if (source.progressEntries !== undefined && (!Array.isArray(source.progressEntries) || source.progressEntries.some(entry => parseProgressEntry(entry) === undefined))) {
 			throw new Error("Invalid Study Time Statistics progress record");
 		}
-		if (source.eventLog !== undefined && (!Array.isArray(source.eventLog) || source.eventLog.some(event => parseStudyEvent(event) === undefined))) {
-			throw new Error("Invalid Study Time Statistics event record");
+		if (source.eventLog !== undefined) {
+			if (!Array.isArray(source.eventLog)) throw new Error("Invalid Study Time Statistics event log");
+			for (const candidate of source.eventLog) {
+				const event = parseStudyEvent(candidate);
+				if (!event) throw new Error("Invalid Study Time Statistics event record");
+				if (event.operation === "upsert" && event.entity === "session" && !parseStudySession(event.payload)) throw new Error("Invalid Study Time Statistics session event");
+				if (event.operation === "upsert" && event.entity === "progress" && !parseProgressEntry(event.payload)) throw new Error("Invalid Study Time Statistics progress event");
+				if (event.operation === "rename") {
+					const payload = asObject(event.payload);
+					if (event.entity !== "note" || typeof payload?.oldPath !== "string" || typeof payload.newPath !== "string" || !payload.newPath) throw new Error("Invalid Study Time Statistics rename event");
+				}
+			}
 		}
 	}
 

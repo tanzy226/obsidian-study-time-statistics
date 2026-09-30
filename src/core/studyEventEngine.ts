@@ -18,7 +18,7 @@ function asObject(value: unknown): Record<string, unknown> | undefined {
 
 export function parseStudyEvent(value: unknown): StudyEvent | undefined {
 	const source = asObject(value);
-	if (!source || typeof source.id !== "string" || typeof source.deviceId !== "string" || typeof source.timestamp !== "number" || !Number.isFinite(source.timestamp) || typeof source.entityId !== "string") return undefined;
+	if (!source || typeof source.id !== "string" || !source.id || typeof source.deviceId !== "string" || !source.deviceId || typeof source.timestamp !== "number" || !Number.isFinite(source.timestamp) || source.timestamp < 0 || typeof source.entityId !== "string" || !source.entityId) return undefined;
 	if (source.entity !== "session" && source.entity !== "progress" && source.entity !== "note") return undefined;
 	if (source.operation !== "upsert" && source.operation !== "delete" && source.operation !== "rename") return undefined;
 	return {id: source.id, deviceId: source.deviceId, timestamp: source.timestamp, entity: source.entity, entityId: source.entityId, operation: source.operation, ...(typeof source.fileId === "string" ? {fileId: source.fileId} : {}), ...(source.payload !== undefined ? {payload: structuredClone(source.payload)} : {})};
