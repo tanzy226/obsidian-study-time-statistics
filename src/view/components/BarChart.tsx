@@ -44,13 +44,26 @@ export function BarChart({data, height = 200, maxBars, onBarClick}: BarChartProp
 				const barHeight = hasData ? Math.max((value / maxValue) * 100, 1) : 0;
 				const displayValue = value > 0 && value < 0.01 ? "<0.01" : value < 0.1 ? value.toFixed(2) : value.toFixed(1);
 				const label = hasData ? `${item.label}: ${displayValue} ${unitLabel}` : `${item.label}: ${I18n.t("noDataAvailable")}`;
-				const fill = <span className={`sts-bar-fill ${hasData ? "" : "is-empty"}`} style={{height: `${barHeight}%`}} />;
 				return <div key={`${item.label}-${index}`} className="bar-wrapper">
-					<div className="bar-container">
-						{hasData && <span className="bar-value-tooltip">{displayValue}{unitLabel}</span>}
-						{hasData && onBarClick
-							? <button type="button" className="sts-bar-button" aria-label={label} title={label} onClick={() => onBarClick(item.label)}>{fill}</button>
-							: <div className="sts-bar-static" role="img" aria-label={label} title={label}>{fill}</div>}
+					<div className="bar-container" {...(!hasData ? {role: "img", "aria-label": label, title: label} : {})}>
+						{hasData && <span className="bar-value-tooltip" style={{bottom: `calc(${barHeight}% + 4px)`}}>{displayValue}{unitLabel}</span>}
+						{hasData && (onBarClick
+							? <div
+								className="sts-bar-column is-interactive"
+								role="button"
+								tabIndex={0}
+								aria-label={label}
+								title={label}
+								style={{height: `${barHeight}%`}}
+								onClick={() => onBarClick(item.label)}
+								onKeyDown={event => {
+									if (event.key === "Enter" || event.key === " ") {
+										event.preventDefault();
+										onBarClick(item.label);
+									}
+								}}
+							/>
+							: <div className="sts-bar-column" role="img" aria-label={label} title={label} style={{height: `${barHeight}%`}} />)}
 					</div>
 					<div className="bar-label" title={item.label}>{item.label}</div>
 				</div>;
