@@ -1,0 +1,27 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+import {adaptiveLevel, linearHeight} from "../src/util/visualScale";
+
+test("adaptive levels preserve contrast when one day is much larger", () => {
+	const values = [10, 20, 30, 40, 10_000];
+	assert.equal(adaptiveLevel(values, 0), 0);
+	assert.equal(adaptiveLevel(values, 10), 1);
+	assert.equal(adaptiveLevel(values, 30), 3);
+	assert.equal(adaptiveLevel(values, 10_000), 5);
+});
+
+test("linear heights keep zero days empty and small positive values visible", () => {
+	assert.equal(linearHeight([0, 10, 100], 0), 0);
+	assert.equal(linearHeight([0, 10, 100], 10), 10);
+	assert.equal(linearHeight([0, 1, 100], 1), 4);
+	assert.equal(linearHeight([0, 10, 100], 100), 100);
+});
+
+test("trend charts render one value-height column without a full-height button track", () => {
+	const source = readFileSync(new URL("../src/view/components/BarChart.tsx", import.meta.url), "utf8");
+	assert.doesNotMatch(source, /<button/);
+	assert.doesNotMatch(source, /sts-bar-fill/);
+	assert.match(source, /className="sts-bar-column is-interactive"/);
+	assert.match(source, /style=\{\{height: `\$\{barHeight\}%`\}\}/);
+});

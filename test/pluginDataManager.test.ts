@@ -111,6 +111,34 @@ test("manual session create, edit, and delete keeps aggregates consistent", asyn
 	assert.equal(manager.getSessions().length, 0);
 });
 
+test("cross-midnight session corrections update every affected day", async () => {
+	const openedAt = new Date(2026, 8, 29, 23, 59, 30).getTime();
+	const {manager} = createManager({
+		readData: {"A.md": {fileId: "a", filePath: "A.md", duration: 0, openCount: 0}},
+		dailyData: {},
+		settings: {}
+	});
+	await manager.loadData();
+	const created = await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt, duration: 120_000});
+	assert.equal(manager.getDailyReadData("2026-9-29")?.dailyReadData.a?.duration, 30_000);
+	assert.equal(manager.getDailyReadData("2026-9-30")?.dailyReadData.a?.duration, 90_000);
+	await manager.deleteSession(created.id);
+	assert.equal(manager.getDailyReadData("2026-9-29")?.dailyReadData.a?.duration, 0);
+	assert.equal(manager.getDailyReadData("2026-9-30")?.dailyReadData.a?.duration, 0);
+});
+
+test("concurrent tracked-time increments are serialized without lost updates", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	const endedAt = new Date(2026, 8, 30, 12).getTime();
+	await Promise.all([
+		manager.addTrackedTime("A.md", "a", 2_000, endedAt),
+		manager.addTrackedTime("A.md", "a", 3_000, endedAt)
+	]);
+	assert.equal(manager.getReadRecord("A.md")?.duration, 5_000);
+	assert.equal(manager.getDailyReadData("2026-9-30")?.dailyReadData.a?.duration, 5_000);
+});
+
 test("completed automatic sessions do not double-count time already tracked", async () => {
 	const {manager} = createManager({
 		readData: {"A.md": {fileId: "a", filePath: "A.md", duration: 6_000, openCount: 1}},
@@ -132,6 +160,29 @@ test("completed automatic sessions do not double-count time already tracked", as
 	assert.equal(manager.getReadRecord("A.md")?.duration, 6_000);
 	assert.equal(manager.getReadRecord("A.md")?.openCount, 1);
 	assert.equal(manager.getSessions().length, 1);
+});
+
+test("safe session repair keeps aggregate totals consistent", async () => {
+	const openedAt = new Date(2026, 8, 30, 10).getTime();
+	const base = {id: "duplicate", fileId: "a", filePath: "A.md", openedAt, source: "automatic" as const, createdAt: openedAt};
+	const {manager} = createManager({
+		readData: {"A.md": {fileId: "a", filePath: "A.md", duration: 12_000, openCount: 2}},
+		dailyData: {"2026-9-30": {
+			dailyReadData: {a: {fileId: "a", filePath: "A.md", duration: 12_000, openCount: 0}},
+			sessions: [
+				{...base, duration: 5_000, closedAt: openedAt + 5_000, updatedAt: openedAt + 5_000},
+				{...base, duration: 7_000, closedAt: openedAt + 7_000, updatedAt: openedAt + 7_000}
+			]
+		}},
+		settings: {}
+	});
+	await manager.loadData();
+	const result = await manager.repairSessionData();
+	assert.equal(result.removed, 1);
+	assert.equal(manager.getSessions().length, 1);
+	assert.equal(manager.getReadRecord("A.md")?.duration, 7_000);
+	assert.equal(manager.getReadRecord("A.md")?.openCount, 1);
+	assert.equal(manager.getDailyReadData("2026-9-30")?.dailyReadData.a?.duration, 7_000);
 });
 
 test("serialized mutations do not lose concurrently added sessions", async () => {

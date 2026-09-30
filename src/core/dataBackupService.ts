@@ -35,8 +35,6 @@ function backupFileName(timestamp: number): string {
 }
 
 export class DataBackupService {
-	private lastSafetyBackupAt = 0;
-
 	constructor(private readonly app: App, private readonly dataManager: PluginDataManager) {}
 
 	public async createBackup(): Promise<string> {
@@ -51,24 +49,36 @@ export class DataBackupService {
 		};
 		const path = normalizePath(`${BACKUP_FOLDER}/${backupFileName(createdAt)}`);
 		await this.app.vault.create(path, JSON.stringify(document, null, 2));
-		this.lastSafetyBackupAt = createdAt;
+		await this.pruneBackups(20);
 		return path;
 	}
 
+	public async pruneBackups(maximum: number): Promise<number> {
+		const files = this.getBackupFiles().slice(Math.max(0, maximum));
+		for (const file of files) await this.app.fileManager.trashFile(file);
+		return files.length;
+	}
+
 	public async createSafetyBackup(): Promise<void> {
-		if (Date.now() - this.lastSafetyBackupAt < 5 * 60 * 1000) return;
 		await this.createBackup();
 	}
 
 	public async restoreLatestBackup(): Promise<string | undefined> {
-		const latest = this.getBackupFiles()[0];
-		if (!latest) return undefined;
-		const content = await this.app.vault.read(latest);
-		const parsedJson: unknown = JSON.parse(content);
-		const backup = parseBackupDocument(parsedJson);
-		if (!backup) throw new Error("Invalid Study Time Statistics backup");
-		await this.dataManager.importData(backup.pluginData);
-		return latest.path;
+		for (const file of this.getBackupFiles()) {
+			try {
+				const content = await this.app.vault.read(file);
+				const parsedJson: unknown = JSON.parse(content);
+				const backup = parseBackupDocument(parsedJson);
+				if (!backup) continue;
+				await this.dataManager.validateImport(backup.pluginData);
+				await this.createBackup();
+				await this.dataManager.importData(backup.pluginData);
+				return file.path;
+			} catch (error) {
+				console.warn(`Study Time Statistics skipped invalid backup: ${file.path}`, error);
+			}
+		}
+		return undefined;
 	}
 
 	public getBackupFiles(): TFile[] {

@@ -35,8 +35,16 @@ class I18n {
 		return translation;
 	}
 
+	public local(english: string, chinese: string): string {
+		return this.language === "zh" ? chinese : english;
+	}
+
 	public static t(key: string, params: TranslationParams = {}): string {
 		return I18n.getInstance().t(key, params);
+	}
+
+	public static local(english: string, chinese: string): string {
+		return I18n.getInstance().local(english, chinese);
 	}
 
 	public static autoDetectLanguage(defaultLanguage = "en"): string {

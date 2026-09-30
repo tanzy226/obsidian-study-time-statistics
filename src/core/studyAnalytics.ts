@@ -1,5 +1,6 @@
 import {ReadRecord} from "../interface/readRecord";
 import {StudySession} from "../interface/studySession";
+import {splitDurationByLocalDay, splitSessionByLocalHour} from "../util/timeBuckets";
 
 export interface DailyStudyPoint {
 	date: string;
@@ -124,7 +125,9 @@ export function buildStudyAnalytics(
 	const activeDaysByPath = new Map<string, Set<string>>();
 	for (const session of sessions) {
 		if (!activeDaysByPath.has(session.filePath)) activeDaysByPath.set(session.filePath, new Set());
-		activeDaysByPath.get(session.filePath)?.add(localDateKey(session.openedAt));
+		for (const slice of splitDurationByLocalDay(session.openedAt, session.duration)) {
+			activeDaysByPath.get(session.filePath)?.add(normalizeDateKey(slice.key));
+		}
 	}
 
 	const rows: NoteStudyRow[] = readRecords
@@ -153,17 +156,15 @@ export function buildStudyAnalytics(
 	const weekdays = weekdayLabels.map(label => ({label, count: 0, duration: 0}));
 	for (const session of sessions) {
 		const date = new Date(session.openedAt);
-		const hour = date.getHours();
-		const weekday = date.getDay();
-		const hourlyPoint = hourly[hour];
-		const weekdayPoint = weekdays[weekday];
-		if (hourlyPoint) {
-			hourlyPoint.count++;
-			hourlyPoint.duration += Math.max(0, session.duration || 0);
-		}
-		if (weekdayPoint) {
-			weekdayPoint.count++;
-			weekdayPoint.duration += Math.max(0, session.duration || 0);
+		const startHour = hourly[date.getHours()];
+		const startWeekday = weekdays[date.getDay()];
+		if (startHour) startHour.count++;
+		if (startWeekday) startWeekday.count++;
+		for (const slice of splitSessionByLocalHour(session.openedAt, session.duration)) {
+			const hourlyPoint = hourly[slice.hour];
+			const weekdayPoint = weekdays[slice.weekday];
+			if (hourlyPoint) hourlyPoint.duration += slice.duration;
+			if (weekdayPoint) weekdayPoint.duration += slice.duration;
 		}
 	}
 

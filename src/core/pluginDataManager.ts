@@ -4,8 +4,11 @@ import {StudySession} from "../interface/studySession";
 import {createLegacySessionId, createSessionId, isStudySessionSource} from "../util/sessionUtils";
 import {ReadingProgressEntry, ReadingProgressInput} from "../interface/readingProgress";
 import {clampPercent, createProgressId} from "../util/readingProgressUtils";
+import {repairSessions} from "../util/dataHealth";
+import {normalizeVisualizationColor, normalizeVisualizationColorMode, VisualizationAppearance} from "../util/visualizationAppearance";
+import {localDateKey, splitDurationByLocalDay} from "../util/timeBuckets";
 
-export const CURRENT_DATA_VERSION = 5;
+export const CURRENT_DATA_VERSION = 6;
 
 export interface DailyReadData {
 	dailyReadData: Record<string, ReadRecord>;
@@ -22,6 +25,8 @@ interface PluginData {
 		progressTrackingEnabled?: boolean;
 		dailyGoalMinutes?: number;
 		weeklyGoalMinutes?: number;
+		visualizationColorMode?: "theme" | "custom";
+		visualizationCustomColor?: string;
 	};
 }
 
@@ -44,11 +49,6 @@ function asObject(value: unknown): Record<string, unknown> | undefined {
 
 function finiteNumber(value: unknown, fallback = 0): number {
 	return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function dateKeyFromTimestamp(timestamp: number): string {
-	const date = new Date(timestamp);
-	return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
 function parseReadRecord(value: unknown, fallbackPath = ""): ReadRecord | undefined {
@@ -157,6 +157,8 @@ function parsePluginData(value: unknown): PluginData {
 	const progressTrackingEnabled = rawSettings?.progressTrackingEnabled;
 	const dailyGoalMinutes = rawSettings?.dailyGoalMinutes;
 	const weeklyGoalMinutes = rawSettings?.weeklyGoalMinutes;
+	const visualizationColorMode = normalizeVisualizationColorMode(rawSettings?.visualizationColorMode);
+	const visualizationCustomColor = normalizeVisualizationColor(rawSettings?.visualizationCustomColor);
 	const rawProgressEntries = source.progressEntries;
 	return {
 		dataVersion: CURRENT_DATA_VERSION,
@@ -169,7 +171,9 @@ function parsePluginData(value: unknown): PluginData {
 			...(typeof strictMode === "boolean" ? {strictMode} : {}),
 			...(typeof progressTrackingEnabled === "boolean" ? {progressTrackingEnabled} : {}),
 			...(typeof dailyGoalMinutes === "number" && Number.isFinite(dailyGoalMinutes) ? {dailyGoalMinutes: Math.max(0, dailyGoalMinutes)} : {}),
-			...(typeof weeklyGoalMinutes === "number" && Number.isFinite(weeklyGoalMinutes) ? {weeklyGoalMinutes: Math.max(0, weeklyGoalMinutes)} : {})
+			...(typeof weeklyGoalMinutes === "number" && Number.isFinite(weeklyGoalMinutes) ? {weeklyGoalMinutes: Math.max(0, weeklyGoalMinutes)} : {}),
+			visualizationColorMode,
+			visualizationCustomColor
 		}
 	};
 }
@@ -252,12 +256,56 @@ export class PluginDataManager {
 		return Object.keys(this.data.dailyData).sort();
 	}
 
+	public getAllDailyReadData(): Readonly<Record<string, DailyReadData>> {
+		return Object.fromEntries(Object.entries(this.data.dailyData).map(([date, value]) => [date, {
+			dailyReadData: Object.fromEntries(Object.entries(value.dailyReadData).map(([id, record]) => [id, {...record}])),
+			sessions: value.sessions.map(session => ({...session}))
+		}]));
+	}
+
 	public async setDailyReadData(date: string, value: DailyReadData): Promise<void> {
 		await this.mutate(data => {
 			data.dailyData[date] = {
 				dailyReadData: {...value.dailyReadData},
 				sessions: value.sessions.map(session => ({...session}))
 			};
+		});
+	}
+
+	public async recordFileOpened(filePath: string, fileId: string, openedAt: number): Promise<ReadRecord> {
+		return this.mutate(data => {
+			const current = data.readData[filePath];
+			const record: ReadRecord = {
+				fileId: current?.fileId ?? fileId,
+				filePath,
+				duration: current?.duration ?? 0,
+				openCount: (current?.openCount ?? 0) + 1,
+				firstOpenedAt: current?.firstOpenedAt ?? openedAt,
+				lastOpenedAt: openedAt
+			};
+			data.readData[filePath] = record;
+			return {...record};
+		});
+	}
+
+	public async addTrackedTime(filePath: string, fileId: string, elapsed: number, endedAt: number): Promise<void> {
+		const safeElapsed = Math.max(0, elapsed);
+		if (safeElapsed < 1) return;
+		await this.mutate(data => {
+			const total = data.readData[filePath] ?? {fileId, filePath, duration: 0, openCount: 1};
+			total.fileId = fileId;
+			total.filePath = filePath;
+			total.duration += safeElapsed;
+			data.readData[filePath] = total;
+
+			for (const slice of splitDurationByLocalDay(endedAt - safeElapsed, safeElapsed)) {
+				const daily = data.dailyData[slice.key] ?? {dailyReadData: {}, sessions: []};
+				const record = daily.dailyReadData[fileId] ?? {fileId, filePath, duration: 0, openCount: 0};
+				record.filePath = filePath;
+				record.duration += slice.duration;
+				daily.dailyReadData[fileId] = record;
+				data.dailyData[slice.key] = daily;
+			}
 		});
 	}
 
@@ -288,6 +336,21 @@ export class PluginDataManager {
 		await this.mutate(data => {
 			data.settings.dailyGoalMinutes = Math.max(0, dailyMinutes);
 			data.settings.weeklyGoalMinutes = Math.max(0, weeklyMinutes);
+		});
+	}
+
+	public getVisualizationAppearance(): VisualizationAppearance {
+		return {
+			colorMode: normalizeVisualizationColorMode(this.data.settings.visualizationColorMode),
+			customColor: normalizeVisualizationColor(this.data.settings.visualizationCustomColor)
+		};
+	}
+
+	public async setVisualizationAppearance(value: Partial<VisualizationAppearance>): Promise<void> {
+		await this.mutate(data => {
+			const current = this.getVisualizationAppearance();
+			data.settings.visualizationColorMode = normalizeVisualizationColorMode(value.colorMode ?? current.colorMode);
+			data.settings.visualizationCustomColor = normalizeVisualizationColor(value.customColor ?? current.customColor);
 		});
 	}
 
@@ -347,6 +410,82 @@ export class PluginDataManager {
 		});
 	}
 
+	public async renameFilePath(oldPath: string, newPath: string): Promise<void> {
+		if (!oldPath || !newPath || oldPath === newPath) return;
+		await this.mutate(data => {
+			const record = data.readData[oldPath];
+			if (record) {
+				delete data.readData[oldPath];
+				data.readData[newPath] = {...record, filePath: newPath};
+			}
+			for (const daily of Object.values(data.dailyData)) {
+				for (const session of daily.sessions) if (session.filePath === oldPath) session.filePath = newPath;
+				for (const dailyRecord of Object.values(daily.dailyReadData)) {
+					if (dailyRecord.filePath === oldPath) dailyRecord.filePath = newPath;
+				}
+			}
+			for (const entry of data.progressEntries) if (entry.filePath === oldPath) entry.filePath = newPath;
+		});
+	}
+
+	public async repairSessionData(): Promise<{removed: number}> {
+		return this.mutate(data => {
+			type SessionTotal = {duration: number; count: number; fileId: string; filePath: string};
+			const summarize = (sessions: StudySession[]) => {
+				const total = new Map<string, SessionTotal>();
+				const daily = new Map<string, Map<string, SessionTotal>>();
+				for (const session of sessions) {
+					const aggregate = total.get(session.fileId) ?? {duration: 0, count: 0, fileId: session.fileId, filePath: session.filePath};
+					aggregate.duration += session.duration;
+					aggregate.count++;
+					aggregate.filePath = session.filePath;
+					total.set(session.fileId, aggregate);
+					for (const slice of splitDurationByLocalDay(session.openedAt, session.duration)) {
+						const day = daily.get(slice.key) ?? new Map<string, SessionTotal>();
+						const point = day.get(session.fileId) ?? {duration: 0, count: 0, fileId: session.fileId, filePath: session.filePath};
+						point.duration += slice.duration;
+						point.filePath = session.filePath;
+						day.set(session.fileId, point);
+						daily.set(slice.key, day);
+					}
+				}
+				return {total, daily};
+			};
+			const beforeSessions = Object.values(data.dailyData).flatMap(day => day.sessions);
+			const afterSessions = repairSessions(beforeSessions);
+			const before = summarize(beforeSessions);
+			const after = summarize(afterSessions);
+
+			for (const record of Object.values(data.readData)) {
+				const oldSessions = before.total.get(record.fileId);
+				const keptSessions = after.total.get(record.fileId);
+				record.duration = Math.max(0, record.duration - (oldSessions?.duration ?? 0)) + (keptSessions?.duration ?? 0);
+				record.openCount = Math.max(0, record.openCount - (oldSessions?.count ?? 0)) + (keptSessions?.count ?? 0);
+			}
+
+			for (const daily of Object.values(data.dailyData)) daily.sessions = [];
+			for (const session of afterSessions) {
+				const date = localDateKey(session.openedAt);
+				const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
+				daily.sessions.push({...session});
+				data.dailyData[date] = daily;
+			}
+			for (const date of new Set([...Object.keys(data.dailyData), ...before.daily.keys(), ...after.daily.keys()])) {
+				const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
+				const oldSessions = before.daily.get(date) ?? new Map<string, SessionTotal>();
+				const keptSessions = after.daily.get(date) ?? new Map<string, SessionTotal>();
+				for (const [fileId, record] of Object.entries(daily.dailyReadData)) {
+					record.duration = Math.max(0, record.duration - (oldSessions.get(fileId)?.duration ?? 0)) + (keptSessions.get(fileId)?.duration ?? 0);
+				}
+				for (const [fileId, aggregate] of keptSessions) {
+					if (!daily.dailyReadData[fileId]) daily.dailyReadData[fileId] = {fileId, filePath: aggregate.filePath, duration: aggregate.duration, openCount: 0};
+				}
+				data.dailyData[date] = daily;
+			}
+			return {removed: beforeSessions.length - afterSessions.length};
+		});
+	}
+
 	public getSessions(): StudySession[] {
 		return Object.values(this.data.dailyData)
 			.flatMap(day => day.sessions)
@@ -361,7 +500,7 @@ export class PluginDataManager {
 
 	public async recordCompletedSession(session: StudySession): Promise<void> {
 		await this.mutate(data => {
-			const date = dateKeyFromTimestamp(session.openedAt);
+			const date = localDateKey(session.openedAt);
 			const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
 			if (!daily.sessions.some(candidate => candidate.id === session.id)) daily.sessions.push({...session});
 			data.dailyData[date] = daily;
@@ -434,11 +573,30 @@ export class PluginDataManager {
 		return structuredClone(this.data);
 	}
 
-	public async importData(value: unknown): Promise<void> {
+	public async validateImport(value: unknown): Promise<void> {
 		const source = asObject(value);
-		if (!source || !asObject(source.readData) || !asObject(source.dailyData)) {
-			throw new Error("Invalid Study Time Statistics data snapshot");
+		const readData = asObject(source?.readData);
+		const dailyData = asObject(source?.dailyData);
+		if (!source || !readData || !dailyData) throw new Error("Invalid Study Time Statistics data snapshot");
+		if (Object.entries(readData).some(([path, record]) => parseReadRecord(record, path) === undefined)) {
+			throw new Error("Invalid Study Time Statistics read record");
 		}
+		for (const candidate of Object.values(dailyData)) {
+			const day = asObject(candidate);
+			const dailyRecords = asObject(day?.dailyReadData);
+			if (!day || !dailyRecords || !Array.isArray(day.sessions)) throw new Error("Invalid Study Time Statistics daily record");
+			if (Object.entries(dailyRecords).some(([path, record]) => parseReadRecord(record, path) === undefined)) {
+				throw new Error("Invalid Study Time Statistics daily note record");
+			}
+			if (day.sessions.some(session => parseStudySession(session) === undefined)) throw new Error("Invalid Study Time Statistics session");
+		}
+		if (source.progressEntries !== undefined && (!Array.isArray(source.progressEntries) || source.progressEntries.some(entry => parseProgressEntry(entry) === undefined))) {
+			throw new Error("Invalid Study Time Statistics progress record");
+		}
+	}
+
+	public async importData(value: unknown): Promise<void> {
+		await this.validateImport(value);
 		const parsed = parsePluginData(value);
 		await this.mutate(data => {
 			data.dataVersion = parsed.dataVersion;
@@ -458,7 +616,7 @@ export class PluginDataManager {
 	}
 
 	private addSessionToDay(data: PluginData, session: StudySession): void {
-		const date = dateKeyFromTimestamp(session.openedAt);
+		const date = localDateKey(session.openedAt);
 		const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
 		daily.sessions.push({...session});
 		data.dailyData[date] = daily;
@@ -487,16 +645,18 @@ export class PluginDataManager {
 		}
 		data.readData[session.filePath] = total;
 
-		const date = dateKeyFromTimestamp(session.openedAt);
-		const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
-		const dailyRecord = daily.dailyReadData[session.fileId] ?? {
-			fileId: session.fileId,
-			filePath: "",
-			duration: 0,
-			openCount: 0
-		};
-		dailyRecord.duration = Math.max(0, dailyRecord.duration + direction * session.duration);
-		daily.dailyReadData[session.fileId] = dailyRecord;
-		data.dailyData[date] = daily;
+		for (const slice of splitDurationByLocalDay(session.openedAt, session.duration)) {
+			const daily = data.dailyData[slice.key] ?? {dailyReadData: {}, sessions: []};
+			const dailyRecord = daily.dailyReadData[session.fileId] ?? {
+				fileId: session.fileId,
+				filePath: session.filePath,
+				duration: 0,
+				openCount: 0
+			};
+			dailyRecord.filePath = session.filePath;
+			dailyRecord.duration = Math.max(0, dailyRecord.duration + direction * slice.duration);
+			daily.dailyReadData[session.fileId] = dailyRecord;
+			data.dailyData[slice.key] = daily;
+		}
 	}
 }
