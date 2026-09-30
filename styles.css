@@ -166,23 +166,13 @@
 	max-height: 800px;
 }
 
-.theme-light .study-time-statistics-dashboard-modal {
-	--sts-viz-1: #38bdf8;
-	--sts-viz-2: #0ea5e9;
-	--sts-viz-3: #6366f1;
-	--sts-viz-4: #8b5cf6;
-	--sts-viz-5: #db2777;
-	--sts-viz-core: #6366f1;
-	--sts-chart-track: rgb(148 163 184 / 5%);
-}
-
-.theme-dark .study-time-statistics-dashboard-modal {
-	--sts-viz-1: #67e8f9;
-	--sts-viz-2: #38bdf8;
-	--sts-viz-3: #818cf8;
-	--sts-viz-4: #c084fc;
-	--sts-viz-5: #f472b6;
-	--sts-viz-core: #818cf8;
+.study-time-statistics-dashboard-modal {
+	--sts-viz-core: var(--sts-viz-base, var(--interactive-accent));
+	--sts-viz-1: color-mix(in srgb, var(--sts-viz-core) 22%, var(--background-primary));
+	--sts-viz-2: color-mix(in srgb, var(--sts-viz-core) 40%, var(--background-primary));
+	--sts-viz-3: color-mix(in srgb, var(--sts-viz-core) 58%, var(--background-primary));
+	--sts-viz-4: color-mix(in srgb, var(--sts-viz-core) 78%, var(--background-primary));
+	--sts-viz-5: var(--sts-viz-core);
 	--sts-chart-track: rgb(148 163 184 / 7%);
 }
 
@@ -775,6 +765,7 @@
 	padding: 10px 30px 10px 10px;
 	position: relative;
 	width: 100%;
+	overflow: visible;
 }
 
 .bar-chart-regular {
@@ -805,40 +796,59 @@
 	align-items: center;
 }
 
-.bar {
+.sts-bar-button,
+.sts-bar-static {
 	width: 100%;
 	height: 100%;
-	transition: all 0.3s ease;
-	cursor: pointer;
 	position: relative;
-	overflow: visible;
+	display: flex;
+	align-items: flex-end;
+	justify-content: stretch;
+	padding: 0;
+	border: 0;
+	background: transparent;
 }
 
-.bar rect {
-	fill: var(--interactive-accent);
-}
-
-.bar:hover {
-	opacity: 0.8;
-}
-
-.bar-clickable {
+.sts-bar-button {
 	cursor: pointer;
 }
 
-.bar-clickable:hover {
-	opacity: 0.9;
-	box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
+.sts-bar-button:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
 }
 
-.bar-empty {
-	opacity: 0.3;
-	cursor: default;
+.sts-bar-fill {
+	display: block;
+	width: 100%;
+	min-height: 0;
+	border-radius: 4px 4px 0 0;
+	background: var(--sts-viz-core, var(--interactive-accent));
+	transition: height 0.2s ease, opacity 0.2s ease;
 }
 
-.bar-empty rect {
-	fill: var(--background-modifier-border);
+.sts-bar-fill.is-empty {
+	height: 0;
+	background: transparent;
 }
+
+.sts-bar-button:hover .sts-bar-fill {
+	opacity: 0.82;
+}
+
+.bar-chart-grid-line {
+	position: absolute;
+	left: 10px;
+	right: 30px;
+	height: 1px;
+	background: var(--background-modifier-border);
+	pointer-events: none;
+	z-index: 0;
+}
+
+.bar-chart-grid-top { top: 10px; }
+.bar-chart-grid-middle { top: 50%; }
+.bar-chart-grid-bottom { bottom: 10px; }
 
 .bar-value-tooltip {
 	position: absolute;
@@ -853,7 +863,8 @@
 	white-space: nowrap;
 }
 
-.bar-wrapper:hover .bar-value-tooltip {
+.bar-wrapper:hover .bar-value-tooltip,
+.bar-wrapper:focus-within .bar-value-tooltip {
 	opacity: 1;
 }
 
@@ -1276,6 +1287,21 @@
 .study-heatmap-cell.level-4 { background: var(--sts-viz-4, var(--interactive-accent)); }
 .study-heatmap-cell.level-5 { background: var(--sts-viz-5, var(--interactive-accent)); }
 
+.study-heatmap-legend {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 4px;
+	margin-top: 5px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.study-heatmap-legend .study-heatmap-cell {
+	display: inline-block;
+	flex: 0 0 8px;
+}
+
 .study-simple-bars {
 	display: flex;
 	align-items: flex-end;
@@ -1312,17 +1338,9 @@
 .study-simple-bar-fill {
 	display: block;
 	width: 100%;
-	height: 100%;
-	overflow: visible;
-	background: transparent;
+	border-radius: 3px 3px 0 0;
+	background: var(--sts-viz-core, var(--interactive-accent));
 }
-
-.study-simple-bar-fill.level-0 rect { fill: transparent; }
-.study-simple-bar-fill.level-1 rect { fill: var(--sts-viz-1, var(--interactive-accent)); }
-.study-simple-bar-fill.level-2 rect { fill: var(--sts-viz-2, var(--interactive-accent)); }
-.study-simple-bar-fill.level-3 rect { fill: var(--sts-viz-3, var(--interactive-accent)); }
-.study-simple-bar-fill.level-4 rect { fill: var(--sts-viz-4, var(--interactive-accent)); }
-.study-simple-bar-fill.level-5 rect { fill: var(--sts-viz-5, var(--interactive-accent)); }
 
 .study-analytics-bar-fill {
 	width: 100%;
@@ -1330,11 +1348,11 @@
 	background: transparent;
 }
 
-.study-analytics-bar-fill.level-1 { background: var(--sts-viz-1, var(--interactive-accent)); }
-.study-analytics-bar-fill.level-2 { background: var(--sts-viz-2, var(--interactive-accent)); }
-.study-analytics-bar-fill.level-3 { background: var(--sts-viz-3, var(--interactive-accent)); }
-.study-analytics-bar-fill.level-4 { background: var(--sts-viz-4, var(--interactive-accent)); }
-.study-analytics-bar-fill.level-5 { background: var(--sts-viz-5, var(--interactive-accent)); }
+.study-analytics-bar-fill.level-1,
+.study-analytics-bar-fill.level-2,
+.study-analytics-bar-fill.level-3,
+.study-analytics-bar-fill.level-4,
+.study-analytics-bar-fill.level-5 { background: var(--sts-viz-core, var(--interactive-accent)); }
 
 .study-simple-bar-label {
 	width: 100%;

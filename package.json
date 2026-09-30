@@ -44,5 +44,8 @@
 	"dependencies": {
 		"react": "18.3.1",
 		"react-dom": "18.3.1"
+	},
+	"overrides": {
+		"moment": "2.31.0"
 	}
 }
