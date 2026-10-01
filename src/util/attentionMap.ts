@@ -50,12 +50,11 @@ export function buildAttentionNodes(
 	return [...groups.values()].map(({coverageTotal, coverageItems, ...node}) => ({...node, coverage: coverageItems ? coverageTotal / coverageItems : 0}));
 }
 
-export function attentionScore(node: AttentionNode, metric: AttentionMetric, now = Date.now()): number {
+export function attentionScore(node: AttentionNode, metric: AttentionMetric): number {
 	if (metric === "duration") return node.duration;
 	if (metric === "opens") return node.opens;
 	if (metric === "coverage") return node.coverage;
-	if (!node.lastOpenedAt) return 0;
-	return Math.max(0, 1 - (now - node.lastOpenedAt) / (90 * 86_400_000));
+	return node.lastOpenedAt;
 }
 
 export interface StudyPathEdge {from: string; to: string; count: number}

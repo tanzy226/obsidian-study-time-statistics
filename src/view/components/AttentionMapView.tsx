@@ -27,13 +27,25 @@ export function AttentionMapView({plugin, onSelect}: {plugin: StudyTimeStatistic
 		</div>
 		<div className="attention-grid">{nodes.map(node => {
 			const isNote = node.path.endsWith(".md") || node.path.endsWith(".pdf");
+			const duration = TimeUtils.getFormattedReadingTime(node.duration);
+			const opens = node.opens.toLocaleString();
+			const primary = metric === "duration"
+				? {label: text("Time", "时长"), value: duration}
+				: metric === "opens"
+					? {label: text("Opens", "打开次数"), value: opens}
+					: metric === "coverage"
+						? {label: text("Coverage", "阅读覆盖"), value: `${Math.round(node.coverage)}%`}
+						: {label: text("Last read", "最近阅读"), value: node.lastOpenedAt ? new Date(node.lastOpenedAt).toLocaleDateString() : text("Never", "尚未阅读")};
 			return <button key={node.path} className="attention-node" title={node.path} onClick={() => isNote ? onSelect(node.path) : setParentPath(node.path)}>
-				<strong className="attention-node-title">{node.label}</strong>
-				<span className="attention-node-metrics">
-					<span className="attention-node-metric"><small>{text("Time", "时长")}</small><b>{TimeUtils.getFormattedReadingTime(node.duration)}</b></span>
-					<span className="attention-node-metric"><small>{text("Opens", "打开次数")}</small><b>{node.opens.toLocaleString()}</b></span>
-					<span className="attention-node-metric"><small>{text("Notes", "笔记数")}</small><b>{node.noteCount.toLocaleString()}</b></span>
+				<span className="attention-node-main">
+					<strong className="attention-node-title">{node.label}</strong>
+					<span className="attention-node-meta">
+						{metric !== "duration" && <span>{text("Time", "时长")} {duration}</span>}
+						{metric !== "opens" && <span>{text("Opens", "打开次数")} {opens}</span>}
+						{!isNote && <span>{text("Notes", "笔记数")} {node.noteCount.toLocaleString()}</span>}
+					</span>
 				</span>
+				<span className="attention-node-primary"><small>{primary.label}</small><b>{primary.value}</b></span>
 			</button>;
 		})}</div>
 		<h3>{text("Frequent transitions", "常见连续阅读")}</h3>
