@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {readFileSync} from "node:fs";
 import {attentionScore, buildAttentionNodes, buildStudyPath} from "../src/util/attentionMap";
 import type {ReadRecord} from "../src/interface/readRecord";
 import type {StudySession} from "../src/interface/studySession";
@@ -37,13 +36,20 @@ test("study paths count repeated transitions", () => {
 	assert.equal(edges.find(edge => edge.from === "A.md" && edge.to === "B.md")?.count, 2);
 });
 
-test("investment cards use wrapping metric cells without intensity styling", () => {
-	const root = new URL("../", import.meta.url);
-	const component = readFileSync(new URL("src/view/components/AttentionMapView.tsx", root), "utf8");
-	const styles = readFileSync(new URL("styles.css", root), "utf8");
-	assert.match(component, /attention-node-metrics/);
-	assert.match(component, /attention-node-metric/);
-	assert.doesNotMatch(component, /--attention-weight/);
-	assert.match(styles, /\.attention-node-title[\s\S]*overflow-wrap: anywhere/);
-	assert.match(styles, /\.attention-node-metrics[\s\S]*minmax\(64px, 1fr\)/);
+test("attention metrics sort by their actual values", () => {
+	const nodes = buildAttentionNodes(
+		{"A.md": {...record("A.md", 10), openCount: 5, lastOpenedAt: 200}, "B.md": {...record("B.md", 20), openCount: 1, lastOpenedAt: 100}},
+		[{id: "1", fileId: "A.md", filePath: "A.md", percent: 80, recordedAt: 1, createdAt: 1, updatedAt: 1}]
+	);
+	assert.deepEqual([...nodes].sort((a, b) => attentionScore(b, "duration") - attentionScore(a, "duration")).map(node => node.path), ["B.md", "A.md"]);
+	assert.deepEqual([...nodes].sort((a, b) => attentionScore(b, "opens") - attentionScore(a, "opens")).map(node => node.path), ["A.md", "B.md"]);
+	assert.deepEqual([...nodes].sort((a, b) => attentionScore(b, "coverage") - attentionScore(a, "coverage")).map(node => node.path), ["A.md", "B.md"]);
+	assert.deepEqual([...nodes].sort((a, b) => attentionScore(b, "recency") - attentionScore(a, "recency")).map(node => node.path), ["A.md", "B.md"]);
+});
+
+test("recency still orders notes older than ninety days", () => {
+	const old = {...record("Old.md", 0), lastOpenedAt: 1};
+	const newer = {...record("Newer.md", 0), lastOpenedAt: 2};
+	const nodes = buildAttentionNodes({"Old.md": old, "Newer.md": newer}, []);
+	assert.deepEqual([...nodes].sort((a, b) => attentionScore(b, "recency") - attentionScore(a, "recency")).map(node => node.path), ["Newer.md", "Old.md"]);
 });
