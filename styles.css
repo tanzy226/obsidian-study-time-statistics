@@ -1642,6 +1642,11 @@
 	min-width: 0;
 	max-width: 100%;
 	padding: 4px 6px;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	color: var(--link-color);
+	text-align: left;
 }
 
 .dashboard-subnav {
