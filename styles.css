@@ -128,8 +128,44 @@
 }
 
 .study-path-list {
+	display: grid;
+	gap: 0;
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
+}
+
+.study-path-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	padding: 7px 2px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.study-path-arrow,
+.study-path-count {
+	color: var(--text-muted);
+}
+
+.study-path-count {
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+@media (width <= 480px) {
+	.study-path-row {
+		grid-template-columns: minmax(0, 1fr) auto;
+	}
+
+	.study-path-to {
+		grid-column: 1;
+	}
+
+	.study-path-count {
+		grid-column: 2;
+	}
 }
 
 .reading-time-text > span[aria-hidden] {
@@ -1570,6 +1606,12 @@
 	text-align: left;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.study-path-row .study-note-button {
+	min-width: 0;
+	max-width: 100%;
+	padding: 4px 6px;
 }
 
 .dashboard-subnav {
