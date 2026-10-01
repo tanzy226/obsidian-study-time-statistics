@@ -49,6 +49,11 @@ export function AttentionMapView({plugin, onSelect}: {plugin: StudyTimeStatistic
 			</button>;
 		})}</div>
 		<h3>{text("Frequent transitions", "常见连续阅读")}</h3>
-		<div className="study-path-list">{paths.map(edge => <div key={`${edge.from}-${edge.to}`}><button className="study-note-button" title={edge.from} onClick={() => onSelect(edge.from)}>{shortName(edge.from)}</button><span> → </span><button className="study-note-button" title={edge.to} onClick={() => onSelect(edge.to)}>{shortName(edge.to)}</button><strong> × {edge.count}</strong></div>)}</div>
+		<div className="study-path-list">{paths.map(edge => <div className="study-path-row" key={`${edge.from}-${edge.to}`}>
+			<button className="study-note-button study-path-from" title={edge.from} onClick={() => onSelect(edge.from)}>{shortName(edge.from)}</button>
+			<span className="study-path-arrow" aria-hidden="true">→</span>
+			<button className="study-note-button study-path-to" title={edge.to} onClick={() => onSelect(edge.to)}>{shortName(edge.to)}</button>
+			<strong className="study-path-count">× {edge.count}</strong>
+		</div>)}</div>
 	</div>;
 }
