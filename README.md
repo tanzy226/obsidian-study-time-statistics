@@ -6,7 +6,9 @@
 
 Study Time Statistics is a privacy-first Obsidian plugin that measures how you study across notes and PDFs. It combines unobtrusive per-note metrics with an Anki-inspired analytics dashboard—without adding anything to your Markdown files.
 
-![Dashboard overview built from anonymized real local data](assets/dashboard-overview.svg)
+![Actual Study Time Statistics analytics overview with private note details excluded](assets/analytics-overview-2026-10-02.png)
+
+*Actual Obsidian interface, captured on 2026-10-02 from a 3.0.0 development build. At capture time, the public release was 2.2.0, so some controls may differ. This is a direct crop of aggregate statistics—not a UI mockup. No note titles, paths, folders, or contents are shown.*
 
 ## Highlights
 
@@ -28,18 +30,13 @@ Study Time Statistics is a privacy-first Obsidian plugin that measures how you s
 - Pause tracking when Obsidian is not focused by enabling Strict mode.
 - Keep all statistics inside the local vault—no account, telemetry, advertising, or cloud upload.
 
-![Inline note metrics using real values with the note title anonymized](assets/inline-note-statistics.svg)
+## Real, anonymized snapshot
 
-## Real, anonymized example
+The captured development build shows **87 notes read**, **200 opens**, and **3h 45m** of recorded reading time as of 2026-10-02. These are the owner's real, point-in-time aggregate values, shared with permission—not sample data, a benchmark, or a live counter. The screenshot excludes note-level rankings and all private titles, paths, folders, and contents.
 
-The following snapshot was generated from real statistics stored by the plugin on 2026-08-10, with the owner's permission. Note titles, paths, folders, and contents were removed; only aggregate values remain.
+![Actual 30-day reading-time and reading-session charts from the same Obsidian capture](assets/analytics-trends-2026-10-02.png)
 
-| Note | Opens | Total | Average | Longest session |
-| --- | ---: | ---: | ---: | ---: |
-| Note A | 2 | 2m 15s | 1m 08s | 1m 37s |
-| Note B | 2 | 29s | 15s | 27s |
-
-Snapshot total: **2 notes**, **4 opens**, and **2m 44s** of recorded reading time. These values are a point-in-time example and will not update with the owner's vault.
+*The two 30-day charts are another direct crop of the same interface capture. We show aggregate views here to keep private note details out of public screenshots.*
 
 ## Open the dashboard
 
@@ -62,7 +59,7 @@ Study Time Statistics is available in the Obsidian Community Plugins directory. 
 
 ## Privacy and storage
 
-All data stays under `.obsidian/plugins/study-time-statistics/` in your own vault. The plugin stores note paths and local study metrics needed for its charts. When Reading Coverage is enabled, it also stores self-reported percentages, note character-count snapshots, related active durations, and local interaction counts and timestamps. It never stores note contents. Timestamped backups are saved to `Study Time Statistics Backups/` in the vault and therefore contain the same private note paths and metrics. It does not send data over the network. The public screenshots and tables contain a permissioned, point-in-time snapshot of real aggregate values, but every note title, path, folder, and content field has been removed or replaced with an anonymous label.
+All data stays under `.obsidian/plugins/study-time-statistics/` in your own vault. The plugin stores note paths and local study metrics needed for its charts. When Reading Coverage is enabled, it also stores self-reported percentages, note character-count snapshots, related active durations, and local interaction counts and timestamps. It never stores note contents. Timestamped backups are saved to `Study Time Statistics Backups/` in the vault and therefore contain the same private note paths and metrics. It does not send data over the network. The public screenshots contain a permissioned, point-in-time snapshot of real aggregate values, but no note title, path, folder, or content field is visible.
 
 ### Syncing between devices
 
@@ -108,6 +105,6 @@ Study Time Statistics（学习时间统计）是一款本地隐私优先的 Obsi
 
 仪表盘提供日、周、月、年和全部时间范围，并包含 365 天热力图、近 30 天趋势、时段与星期分布、会话时长分布、文件夹汇总、最近会话，以及按打开次数、累计阅读、平均阅读、最长单次和活跃天数排列的榜单。1.3.0 新增学习目标与会话复核；2.0.0 新增学习总览；2.1.0 新增阅读起止位置、手填/估算阅读字符、重复阅读量、等效通读遍数和每千字用时。覆盖度与位置都不代表吸收、理解、记忆或掌握程度。
 
-上方图片和表格使用插件在 2026-08-10 保存的真实统计快照：共 **2 篇笔记、4 次打开、累计 2 分 44 秒**。公开材料仅保留统计数值，真实笔记标题、路径、文件夹和正文均已删除，并统一替换为“Note A / Note B”。
+上方图片是 2026-10-02 从实际 Obsidian 界面直接裁切的截图，显示当时 **87 篇已读笔记、200 次打开、累计 3 小时 45 分钟**。截图来自当时尚未公开发布的 3.0.0 开发版；截取时公开最新版为 2.2.0，部分控件可能不同。公开图片仅展示汇总数据，没有笔记标题、路径、文件夹或正文。
 
 所有学习数据仅保存在本地库中，插件不上传数据、不收集遥测、无广告，也不需要云端账户。若整库同步包含 `.obsidian` 配置文件夹，数据可随 Obsidian Sync、iCloud、坚果云等现有方案同步，无需插件另建同步服务。完整中文说明见 [README_zh.md](README_zh.md)。
