@@ -14,6 +14,7 @@ export default defineConfig(
 		"tsconfig.json",
 		"assets/**",
 		"test/**",
+		"scripts/check-css.mjs",
 	]),
 	{
 		languageOptions: {
