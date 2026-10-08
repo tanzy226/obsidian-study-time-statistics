@@ -11,9 +11,10 @@ import {StudyGoalsView} from "./StudyGoalsView";
 import {StudyCockpitView} from "./StudyCockpitView";
 import {FeedbackView} from "./FeedbackView";
 import {DataHealthView} from "./DataHealthView";
+import {AnalysisExplorerView} from "./AnalysisExplorerView";
 
 type ViewType = 'overview' | 'analytics' | 'records' | 'more';
-type AnalyticsTab = 'summary' | 'trends' | 'ranking';
+type AnalyticsTab = 'summary' | 'trends' | 'filter' | 'ranking';
 type RecordsTab = 'sessions' | 'progress' | 'goals';
 type MoreTab = 'health' | 'feedback';
 
@@ -122,10 +123,12 @@ function AnalyticsHub({plugin, onSelect}: {plugin: StudyTimeStatisticsPlugin; on
 	return <><HubTabs value={tab} onChange={setTab} items={[
 		{value: 'summary', label: I18n.t('analyticsSummary')},
 		{value: 'trends', label: I18n.t('analyticsTrends')},
+		{value: 'filter', label: I18n.t('analyticsFilter')},
 		{value: 'ranking', label: I18n.t('leaderboard')}
 	]} />
 		{tab === 'summary' && <StudyAnalyticsView plugin={plugin} onSelect={onSelect} />}
 		{tab === 'trends' && <StatisticsView plugin={plugin} onSelect={onSelect} />}
+		{tab === 'filter' && <AnalysisExplorerView plugin={plugin} onSelect={onSelect} />}
 		{tab === 'ranking' && <LeaderboardView plugin={plugin} onSelect={onSelect} />}
 	</>;
 }
