@@ -26,7 +26,7 @@ export function AttentionMapView({plugin, onSelect}: {plugin: StudyTimeStatistic
 			<span>{parentPath || text("Vault", "仓库")}</span>
 		</div>
 		<div className="attention-grid">{nodes.map(node => {
-			const isNote = node.path.endsWith(".md") || node.path.endsWith(".pdf");
+			const isNote = node.isNote;
 			const duration = TimeUtils.getFormattedReadingTime(node.duration);
 			const opens = node.opens.toLocaleString();
 			const primary = metric === "duration"
@@ -48,7 +48,7 @@ export function AttentionMapView({plugin, onSelect}: {plugin: StudyTimeStatistic
 				<span className="attention-node-primary"><small>{primary.label}</small><b>{primary.value}</b></span>
 			</button>;
 		})}</div>
-		<h3>{text("Frequent transitions", "常见连续阅读")}</h3>
+		<h3>{text("Frequent transitions within 30 minutes", "30 分钟内常见连续阅读")}</h3>
 		<div className="study-path-list">{paths.map(edge => <div className="study-path-row" key={`${edge.from}-${edge.to}`}>
 			<button className="study-note-button study-path-from" title={edge.from} onClick={() => onSelect(edge.from)}>{shortName(edge.from)}</button>
 			<span className="study-path-arrow" aria-hidden="true">→</span>
