@@ -30,12 +30,6 @@ export function DataHealthView({plugin}: {plugin: StudyTimeStatisticsPlugin}) {
 			setBusy(false);
 		}
 	};
-	const issueLabel = (kind: DataHealthReport["issues"][number]["kind"]): string => ({
-		"duplicate-session": text("Duplicate session", "重复会话"),
-		"invalid-session": text("Invalid session", "无效会话"),
-		"missing-note": text("Note no longer exists", "笔记已不存在"),
-		"orphan-progress": text("Coverage belongs to a missing note", "覆盖记录对应的笔记已不存在")
-	})[kind];
 	const createBackup = async () => {
 		if (busy) return;
 		setBusy(true);
@@ -65,6 +59,12 @@ export function DataHealthView({plugin}: {plugin: StudyTimeStatisticsPlugin}) {
 			setBusy(false);
 		}
 	};
+	const issueLabel = (kind: DataHealthReport["issues"][number]["kind"]): string => ({
+		"duplicate-session": text("Duplicate session", "重复会话"),
+		"invalid-session": text("Invalid session", "无效会话"),
+		"missing-note": text("Note no longer exists", "笔记已不存在"),
+		"orphan-progress": text("Coverage belongs to a missing note", "覆盖记录对应的笔记已不存在")
+	})[kind];
 
 	return <div className="data-health-view">
 		<h2>{text("Data management", "数据管理")}</h2>
