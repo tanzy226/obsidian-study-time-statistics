@@ -5,6 +5,7 @@ import {createLegacySessionId, createSessionId, isStudySessionSource} from "../u
 import {ReadingProgressEntry, ReadingProgressInput} from "../interface/readingProgress";
 import {clampPercent, createProgressId} from "../util/readingProgressUtils";
 import {repairSessions} from "../util/dataHealth";
+import {DEFAULT_TRACKING_PRECISION, normalizeTrackingPrecision, TrackingPrecisionSettings} from "../util/trackingPrecision";
 import {normalizeVisualizationColor, normalizeVisualizationColorMode, VisualizationAppearance} from "../util/visualizationAppearance";
 import {localDateKey, splitDurationByLocalDay} from "../util/timeBuckets";
 
@@ -25,6 +26,8 @@ interface PluginData {
 		progressTrackingEnabled?: boolean;
 		dailyGoalMinutes?: number;
 		weeklyGoalMinutes?: number;
+		idleTimeoutMinutes?: number;
+		minimumSessionSeconds?: number;
 		visualizationColorMode?: "theme" | "custom";
 		visualizationCustomColor?: string;
 	};
@@ -157,6 +160,10 @@ function parsePluginData(value: unknown): PluginData {
 	const progressTrackingEnabled = rawSettings?.progressTrackingEnabled;
 	const dailyGoalMinutes = rawSettings?.dailyGoalMinutes;
 	const weeklyGoalMinutes = rawSettings?.weeklyGoalMinutes;
+	const precision = normalizeTrackingPrecision({
+		idleTimeoutMinutes: finiteNumber(rawSettings?.idleTimeoutMinutes, DEFAULT_TRACKING_PRECISION.idleTimeoutMinutes),
+		minimumSessionSeconds: finiteNumber(rawSettings?.minimumSessionSeconds, DEFAULT_TRACKING_PRECISION.minimumSessionSeconds)
+	});
 	const visualizationColorMode = normalizeVisualizationColorMode(rawSettings?.visualizationColorMode);
 	const visualizationCustomColor = normalizeVisualizationColor(rawSettings?.visualizationCustomColor);
 	const rawProgressEntries = source.progressEntries;
@@ -172,6 +179,8 @@ function parsePluginData(value: unknown): PluginData {
 			...(typeof progressTrackingEnabled === "boolean" ? {progressTrackingEnabled} : {}),
 			...(typeof dailyGoalMinutes === "number" && Number.isFinite(dailyGoalMinutes) ? {dailyGoalMinutes: Math.max(0, dailyGoalMinutes)} : {}),
 			...(typeof weeklyGoalMinutes === "number" && Number.isFinite(weeklyGoalMinutes) ? {weeklyGoalMinutes: Math.max(0, weeklyGoalMinutes)} : {}),
+			idleTimeoutMinutes: precision.idleTimeoutMinutes,
+			minimumSessionSeconds: precision.minimumSessionSeconds,
 			visualizationColorMode,
 			visualizationCustomColor
 		}
@@ -336,6 +345,21 @@ export class PluginDataManager {
 		await this.mutate(data => {
 			data.settings.dailyGoalMinutes = Math.max(0, dailyMinutes);
 			data.settings.weeklyGoalMinutes = Math.max(0, weeklyMinutes);
+		});
+	}
+
+	public getTrackingPrecision(): TrackingPrecisionSettings {
+		return normalizeTrackingPrecision({
+			idleTimeoutMinutes: this.data.settings.idleTimeoutMinutes,
+			minimumSessionSeconds: this.data.settings.minimumSessionSeconds
+		});
+	}
+
+	public async setTrackingPrecision(value: Partial<TrackingPrecisionSettings>): Promise<void> {
+		await this.mutate(data => {
+			const normalized = normalizeTrackingPrecision({...this.getTrackingPrecision(), ...value});
+			data.settings.idleTimeoutMinutes = normalized.idleTimeoutMinutes;
+			data.settings.minimumSessionSeconds = normalized.minimumSessionSeconds;
 		});
 	}
 

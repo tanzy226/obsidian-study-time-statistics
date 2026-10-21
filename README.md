@@ -4,11 +4,11 @@
 
 Study Time Statistics helps you see where your reading time goes in Obsidian. It tracks time and opens for notes and PDFs, shows a small statistics strip inside each Markdown note, and turns your local history into trends, rankings, and a study-investment map. You can optionally record how much of a note you read. It never writes statistics into your Markdown content.
 
-**This guide covers the public 2.4.0 release.** Later features under development are not presented as available here; see the [release roadmap](ROADMAP.md).
+**This guide covers the 2.5.0 release.** Later features under development are not presented as available here; see the [release roadmap](ROADMAP.md).
 
 ![Actual Study Time Statistics analytics overview with private note details excluded](assets/analytics-overview-2026-10-02.png)
 
-*A direct crop of the actual Obsidian interface, captured on 2026-10-02 from a 3.0.0 development build. Its controls may differ from public 2.4.0. No note titles, paths, folders, or contents are shown.*
+*A direct crop of the actual Obsidian interface, captured on 2026-10-02 from a 3.0.0 development build. Its controls may differ from 2.5.0. No note titles, paths, folders, or contents are shown.*
 
 ## What it does
 
@@ -22,7 +22,7 @@ Study Time Statistics helps you see where your reading time goes in Obsidian. It
 
 ### Automatic tracking and per-note statistics
 
-- Track time and opens while reading Markdown notes or PDFs. The status bar also shows the active file's accumulated time. The default Strict mode pauses the timer when Obsidian loses focus; it does not attempt to prove that you understood the material.
+- Track time and opens while reading Markdown notes or PDFs. The status bar also shows the active file's accumulated time. The default Strict mode pauses the timer when Obsidian loses focus. In 2.5.0, you can also choose an idle timeout (20 minutes by default, or 0 to disable it); neither setting proves that you understood the material.
 - The Markdown note strip is part of the editor/preview UI, not the document. It scrolls out of view with the content and shows seven core metrics; when optional coverage is enabled, it can also show coverage, position, and characters read.
 - Open count and reading sessions are kept separately. You can inspect session start, duration, and note later, and add, edit, or delete a session if the automatic record was inaccurate.
 
@@ -41,6 +41,7 @@ Study Time Statistics helps you see where your reading time goes in Obsidian. It
 ### Control over your data
 
 - Data stays in your vault. There is no plugin account, telemetry, advertising, or automatic network upload. The dashboard's Feedback page opens GitHub forms only when you choose to use them.
+- The dashboard and its filters, maps, and tables adapt to narrower screens. Touch and page-visibility events also help the timer respond on mobile and in multi-window use.
 - Use the Command Palette to create a timestamped local backup or restore the latest usable backup. Under More, Data Health checks duplicate or invalid sessions and references to missing notes. Safe repairs make a backup first; missing-note history is retained instead of erased. Renaming a note moves its associated records to the new path. The 20 newest backups are retained automatically.
 
 ## Reading the numbers correctly
@@ -123,7 +124,7 @@ The codebase is derived from [AstraDev's open-source Obsidian time tracker](http
 
 Study Time Statistics（学习时间统计）是一款本地隐私优先的 Obsidian 插件，统计笔记与 PDF 的阅读时间和打开次数，在 Markdown 笔记顶部展示随正文滚动的统计条，并提供学习总览、趋势与热力图、五类本地排行榜、筛选对比和按文件夹浏览的投入地图。它不会改写笔记原文。
 
-本页按公开 2.4.0 版介绍。可选的阅读覆盖度、位置与字符统计只描述阅读行为，不代表吸收、理解或记忆。完整功能、数据口径和使用方法见 [中文说明](README_zh.md)。
+本页按 2.5.0 版介绍。可选的阅读覆盖度、位置与字符统计只描述阅读行为，不代表吸收、理解或记忆。完整功能、数据口径和使用方法见 [中文说明](README_zh.md)。
 
 上方图片是 2026-10-02 从实际 Obsidian 界面直接裁切的截图，显示当时 **87 篇已读笔记、200 次打开、累计 3 小时 45 分钟**。截图来自当时尚未公开发布的 3.0.0 开发版；截取时公开最新版为 2.2.0，部分控件可能不同。公开图片仅展示汇总数据，没有笔记标题、路径、文件夹或正文。
 
