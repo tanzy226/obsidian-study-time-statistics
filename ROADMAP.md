@@ -1,12 +1,11 @@
 # Release roadmap / 发布路线
 
-The next release under review is **2.5.0**. We review the next version each week and publish it when it passes the release checks; there is no fixed waiting period or guaranteed release date. Development branches are not public releases.
+The current public release is **2.5.0**. We review the next version each week and publish it when it passes the release checks; there is no fixed waiting period or guaranteed release date. Development branches are not public releases.
 
-正在审核的下一个版本为 **2.5.0**。我们每周检查下一个版本，完成审核后即可发布；不设固定等待天数，也不承诺具体发布日期。开发分支不等于公开版本。
+目前公开版为 **2.5.0**。我们每周检查下一个版本，完成审核后即可发布；不设固定等待天数，也不承诺具体发布日期。开发分支不等于公开版本。
 
 | Next version | Focus / 重点 |
 | --- | --- |
-| 2.5.0 | Tracking precision and mobile layout / 计时精度与移动端布局 |
 | 2.6.0 | Privacy-first reports and export / 隐私优先的报告与导出 |
 | 3.0.0 | Local event engine and deterministic snapshot merge / 本地事件引擎与可确定性合并的数据快照 |
 
