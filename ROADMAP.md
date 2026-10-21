@@ -1,8 +1,8 @@
 # Release roadmap / 发布路线
 
-The current public release is **2.4.0**. We review the next version each week and publish it when it passes the release checks; there is no fixed waiting period or guaranteed release date. Development branches are not public releases.
+The next release under review is **2.5.0**. We review the next version each week and publish it when it passes the release checks; there is no fixed waiting period or guaranteed release date. Development branches are not public releases.
 
-目前公开版为 **2.4.0**。我们每周检查下一个版本，完成审核后即可发布；不设固定等待天数，也不承诺具体发布日期。开发分支不等于公开版本。
+正在审核的下一个版本为 **2.5.0**。我们每周检查下一个版本，完成审核后即可发布；不设固定等待天数，也不承诺具体发布日期。开发分支不等于公开版本。
 
 | Next version | Focus / 重点 |
 | --- | --- |
