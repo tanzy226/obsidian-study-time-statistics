@@ -4,11 +4,11 @@
 
 Study Time Statistics helps you see where your reading time goes in Obsidian. It tracks time and opens for notes and PDFs, shows a small statistics strip inside each Markdown note, and turns your local history into trends, rankings, and a study-investment map. You can optionally record how much of a note you read. It never writes statistics into your Markdown content.
 
-**This guide covers the 2.5.0 release.** Later features under development are not presented as available here; see the [release roadmap](ROADMAP.md).
+**This guide covers the 2.6.0 release.** Later features under development are not presented as available here; see the [release roadmap](ROADMAP.md).
 
 ![Actual Study Time Statistics analytics overview with private note details excluded](assets/analytics-overview-2026-10-02.png)
 
-*A direct crop of the actual Obsidian interface, captured on 2026-10-02 from a 3.0.0 development build. Its controls may differ from 2.5.0. No note titles, paths, folders, or contents are shown.*
+*A direct crop of the actual Obsidian interface, captured on 2026-10-02 from a 3.0.0 development build. Its controls may differ from 2.6.0. No note titles, paths, folders, or contents are shown.*
 
 ## What it does
 
@@ -18,7 +18,7 @@ Study Time Statistics helps you see where your reading time goes in Obsidian. It
 | Study Overview | See today and this week, goal progress, previous-week comparison, session-quality indicators, high-investment hours, and notes you have not opened recently. |
 | Analytics | Explore trends, heatmaps, five rankings, local filters and period comparisons, plus a folder-by-folder investment map. |
 | Records | Inspect or correct sessions, optionally record reading coverage and position, and set daily or weekly goals. |
-| More | Check data health and open feedback forms. Backup and restore commands are in the Command Palette. |
+| More | Create local reports, check data health, and open feedback forms. Backup and restore commands are in the Command Palette. |
 
 ### Automatic tracking and per-note statistics
 
@@ -41,6 +41,7 @@ Study Time Statistics helps you see where your reading time goes in Obsidian. It
 ### Control over your data
 
 - Data stays in your vault. There is no plugin account, telemetry, advertising, or automatic network upload. The dashboard's Feedback page opens GitHub forms only when you choose to use them.
+- From **More → Reports**, select a date range and preview a locally generated summary. Download JSON, CSV, or Markdown, or copy the Markdown report. Note names are hidden by default; turn that option off only when you intend to include real paths in an export. Exports are saved by your browser/operating system and may contain private study times even when names are hidden.
 - The dashboard and its filters, maps, and tables adapt to narrower screens. Touch and page-visibility events also help the timer respond on mobile and in multi-window use.
 - Use the Command Palette to create a timestamped local backup or restore the latest usable backup. Under More, Data Health checks duplicate or invalid sessions and references to missing notes. Safe repairs make a backup first; missing-note history is retained instead of erased. Renaming a note moves its associated records to the new path. The 20 newest backups are retained automatically.
 
@@ -124,7 +125,7 @@ The codebase is derived from [AstraDev's open-source Obsidian time tracker](http
 
 Study Time Statistics（学习时间统计）是一款本地隐私优先的 Obsidian 插件，统计笔记与 PDF 的阅读时间和打开次数，在 Markdown 笔记顶部展示随正文滚动的统计条，并提供学习总览、趋势与热力图、五类本地排行榜、筛选对比和按文件夹浏览的投入地图。它不会改写笔记原文。
 
-本页按 2.5.0 版介绍。可选的阅读覆盖度、位置与字符统计只描述阅读行为，不代表吸收、理解或记忆。完整功能、数据口径和使用方法见 [中文说明](README_zh.md)。
+本页按 2.6.0 版介绍。可选的阅读覆盖度、位置与字符统计只描述阅读行为，不代表吸收、理解或记忆。完整功能、数据口径和使用方法见 [中文说明](README_zh.md)。
 
 上方图片是 2026-10-02 从实际 Obsidian 界面直接裁切的截图，显示当时 **87 篇已读笔记、200 次打开、累计 3 小时 45 分钟**。截图来自当时尚未公开发布的 3.0.0 开发版；截取时公开最新版为 2.2.0，部分控件可能不同。公开图片仅展示汇总数据，没有笔记标题、路径、文件夹或正文。
 
