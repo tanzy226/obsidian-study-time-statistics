@@ -184,20 +184,6 @@
 	white-space: pre-wrap;
 }
 
-@media print {
-	.study-time-statistics-sidebar,
-	.sidebar-toggle,
-	.analysis-filter-grid,
-	.data-health-actions {
-		display: none;
-	}
-
-	.report-preview {
-		max-height: none;
-		border: 0;
-	}
-}
-
 .reading-time-text > span[aria-hidden] {
 	display: inline-flex;
 }
