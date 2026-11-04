@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {buildStudyReport, reportToCsv, reportToMarkdown} from "../src/util/reportBuilder";
+import {buildStudyReport, reportDateRange, reportToCsv, reportToMarkdown} from "../src/util/reportBuilder";
 import type {StudySession} from "../src/interface/studySession";
 
 const session = (id: string, filePath: string, openedAt: number, duration: number): StudySession => ({id, fileId: id, filePath, openedAt, closedAt: openedAt + duration, duration, source: "automatic", createdAt: openedAt, updatedAt: openedAt + duration});
@@ -20,4 +20,20 @@ test("identified reports aggregate sessions by note", () => {
 test("identified CSV reports neutralize spreadsheet formulas", () => {
 	const report = buildStudyReport([session("1", "=HYPERLINK(\"https://example.invalid\")", 10, 100)], {startAt: 0, endAt: 200, anonymize: false}, 300);
 	assert.match(reportToCsv(report), /\n"'=HYPERLINK/u);
+});
+
+test("report dates reject empty, impossible, and reversed ranges", () => {
+	assert.equal(reportDateRange("", "2026-10-28"), undefined);
+	assert.equal(reportDateRange("2026-02-30", "2026-10-28"), undefined);
+	assert.equal(reportDateRange("2026-10-29", "2026-10-28"), undefined);
+	assert.deepEqual(reportDateRange("2026-10-28", "2026-10-28"), {
+		startAt: new Date(2026, 9, 28).getTime(),
+		endAt: new Date(2026, 9, 29).getTime()
+	});
+});
+
+test("Markdown report follows the selected language", () => {
+	const report = buildStudyReport([session("1", "Example.md", 10, 100)], {startAt: 0, endAt: 200, anonymize: true}, 300);
+	assert.match(reportToMarkdown(report, "zh"), /^# 学习时间统计报告/u);
+	assert.match(reportToMarkdown(report, "en"), /^# Study Time Statistics report/u);
 });
