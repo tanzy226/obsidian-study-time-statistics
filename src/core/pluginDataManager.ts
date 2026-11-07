@@ -10,6 +10,14 @@ import {normalizeVisualizationColor, normalizeVisualizationColorMode, Visualizat
 import {localDateKey, splitDurationByLocalDay} from "../util/timeBuckets";
 
 export const CURRENT_DATA_VERSION = 6;
+export type NoteBarDisplay = "hidden" | "compact" | "full";
+export type NoteBarPosition = "top" | "bottom";
+export function normalizeNoteBarDisplay(value: unknown): NoteBarDisplay {
+	return value === "hidden" || value === "full" ? value : "compact";
+}
+export function normalizeNoteBarPosition(value: unknown): NoteBarPosition {
+	return value === "bottom" ? "bottom" : "top";
+}
 
 export interface DailyReadData {
 	dailyReadData: Record<string, ReadRecord>;
@@ -24,6 +32,8 @@ interface PluginData {
 	settings: {
 		strictMode?: boolean;
 		progressTrackingEnabled?: boolean;
+		noteBarDisplay?: NoteBarDisplay;
+		noteBarPosition?: NoteBarPosition;
 		dailyGoalMinutes?: number;
 		weeklyGoalMinutes?: number;
 		idleTimeoutMinutes?: number;
@@ -158,6 +168,8 @@ function parsePluginData(value: unknown): PluginData {
 	const rawSettings = asObject(source.settings);
 	const strictMode = rawSettings?.strictMode;
 	const progressTrackingEnabled = rawSettings?.progressTrackingEnabled;
+	const noteBarDisplay = normalizeNoteBarDisplay(rawSettings?.noteBarDisplay);
+	const noteBarPosition = normalizeNoteBarPosition(rawSettings?.noteBarPosition);
 	const dailyGoalMinutes = rawSettings?.dailyGoalMinutes;
 	const weeklyGoalMinutes = rawSettings?.weeklyGoalMinutes;
 	const precision = normalizeTrackingPrecision({
@@ -177,6 +189,8 @@ function parsePluginData(value: unknown): PluginData {
 		settings: {
 			...(typeof strictMode === "boolean" ? {strictMode} : {}),
 			...(typeof progressTrackingEnabled === "boolean" ? {progressTrackingEnabled} : {}),
+			noteBarDisplay,
+			noteBarPosition,
 			...(typeof dailyGoalMinutes === "number" && Number.isFinite(dailyGoalMinutes) ? {dailyGoalMinutes: Math.max(0, dailyGoalMinutes)} : {}),
 			...(typeof weeklyGoalMinutes === "number" && Number.isFinite(weeklyGoalMinutes) ? {weeklyGoalMinutes: Math.max(0, weeklyGoalMinutes)} : {}),
 			idleTimeoutMinutes: precision.idleTimeoutMinutes,
@@ -328,6 +342,17 @@ export class PluginDataManager {
 
 	public getProgressTrackingEnabled(): boolean {
 		return this.data.settings.progressTrackingEnabled ?? false;
+	}
+
+	public getNoteBarPreferences(): {display: NoteBarDisplay; position: NoteBarPosition} {
+		return {display: normalizeNoteBarDisplay(this.data.settings.noteBarDisplay), position: normalizeNoteBarPosition(this.data.settings.noteBarPosition)};
+	}
+
+	public async setNoteBarPreferences(value: Partial<{display: NoteBarDisplay; position: NoteBarPosition}>): Promise<void> {
+		await this.mutate(data => {
+			if (value.display !== undefined) data.settings.noteBarDisplay = normalizeNoteBarDisplay(value.display);
+			if (value.position !== undefined) data.settings.noteBarPosition = normalizeNoteBarPosition(value.position);
+		});
 	}
 
 	public async setProgressTrackingEnabled(value: boolean): Promise<void> {

@@ -58,6 +58,17 @@ test("validates and normalizes persisted plugin data", async () => {
 	assert.equal(manager.getStrictMode(), false);
 });
 
+test("in-note strip preferences default to compact top and persist without changing study data", async () => {
+	const {manager, store} = createManager({readData: {}, dailyData: {}, settings: {noteBarDisplay: "unexpected", noteBarPosition: "unexpected"}});
+	await manager.loadData();
+	assert.deepEqual(manager.getNoteBarPreferences(), {display: "compact", position: "top"});
+	await manager.setNoteBarPreferences({display: "hidden", position: "bottom"});
+	assert.deepEqual(manager.getNoteBarPreferences(), {display: "hidden", position: "bottom"});
+	assert.deepEqual((store.savedData as {readData: unknown}).readData, {});
+	await manager.setNoteBarPreferences({display: "full"});
+	assert.deepEqual(manager.getNoteBarPreferences(), {display: "full", position: "bottom"});
+});
+
 test("persists typed updates without losing other categories", async () => {
 	const {manager, store} = createManager({
 		readData: {},
