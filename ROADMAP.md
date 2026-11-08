@@ -1,8 +1,8 @@
 # Release roadmap / 发布路线
 
-The current public release is **3.0.0**. Future updates will be planned from user feedback and verified before publication; no dates or versions beyond 3.0.0 are promised.
+The current public release is **2.6.1**. We review the next version each week and publish it when it passes the release checks; there is no fixed waiting period or guaranteed release date. Development branches are not public releases.
 
-目前公开版为 **3.0.0**。后续更新将结合用户反馈规划，并在完成验证后发布；目前不承诺 3.0.0 之后的版本号或日期。
+目前公开版为 **2.6.1**。我们每周检查下一个版本，完成审核后即可发布；不设固定等待天数，也不承诺具体发布日期。开发分支不等于公开版本。
 
 Every release requires build, test, privacy, security, CI, and release-asset verification. A failed review delays publication rather than shipping a known-bad build.
 

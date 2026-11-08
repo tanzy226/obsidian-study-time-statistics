@@ -4,7 +4,7 @@
 
 Study Time Statistics helps you see where your reading time goes in Obsidian. It tracks time and opens for notes and PDFs, shows a small statistics strip inside each Markdown note, and turns your local history into trends, rankings, and a study-investment map. You can optionally record how much of a note you read. It never writes statistics into your Markdown content.
 
-**This guide covers the 3.0.0 release.** Later updates will be shaped by feedback; see the [release roadmap](ROADMAP.md).
+**The current public release is 2.6.1.** This branch also contains the 3.0.0 development work; see the [release roadmap](ROADMAP.md).
 
 ![Actual Study Time Statistics analytics overview with private note details excluded](assets/analytics-overview-2026-10-02.png)
 
@@ -14,7 +14,7 @@ Study Time Statistics helps you see where your reading time goes in Obsidian. It
 
 | In Obsidian | What you can see or do |
 | --- | --- |
-| At the top of a Markdown note | See opens, total and average time, longest session, active days, current streak, and last read time. The strip scrolls with the note and does not alter its file. |
+| In a Markdown note | Choose a compact one-line strip (default), full statistics, or no strip; place it at the top or bottom. It scrolls with the note and does not alter its file. |
 | Study Overview | See today and this week, goal progress, previous-week comparison, session-quality indicators, high-investment hours, and notes you have not opened recently. |
 | Analytics | Explore trends, heatmaps, five rankings, local filters and period comparisons, plus a folder-by-folder investment map. |
 | Records | Inspect or correct sessions, optionally record reading coverage and position, and set daily or weekly goals. |
@@ -23,7 +23,7 @@ Study Time Statistics helps you see where your reading time goes in Obsidian. It
 ### Automatic tracking and per-note statistics
 
 - Track time and opens while reading Markdown notes or PDFs. The status bar also shows the active file's accumulated time. The default Strict mode pauses the timer when Obsidian loses focus. In 2.5.0, you can also choose an idle timeout (20 minutes by default, or 0 to disable it); neither setting proves that you understood the material.
-- The Markdown note strip is part of the editor/preview UI, not the document. It scrolls out of view with the content and shows seven core metrics; when optional coverage is enabled, it can also show coverage, position, and characters read.
+- The Markdown note strip is part of the editor/preview UI, not the document. Its compact line shows opens and total time; full mode shows seven core metrics and optional coverage details. Choose top, bottom, or hidden in plugin settings. It scrolls with the content.
 - Open count and reading sessions are kept separately. You can inspect session start, duration, and note later, and add, edit, or delete a session if the automatic record was inaccurate.
 
 ### Analytics, comparisons, and navigation

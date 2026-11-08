@@ -17,6 +17,7 @@ export class NoteStatsBarManager {
 		this.app = app;
 		this.dataManager = dataManager;
 		this.plugin = plugin;
+		plugin.register(dataManager.onDidChange(() => this.render()));
 		plugin.registerEvent(app.workspace.on("layout-change", () => { this.render(); }));
 		plugin.registerEvent(app.workspace.on("file-open", () => { void this.refreshForVisibleNotes(); }));
 		plugin.registerEvent(app.workspace.on("active-leaf-change", () => { void this.refreshForVisibleNotes(); }));
@@ -33,16 +34,23 @@ export class NoteStatsBarManager {
 	}
 
 	public render() {
+		const preferences = this.dataManager.getNoteBarPreferences();
 		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
 			const view = leaf.view;
 			if (!(view instanceof MarkdownView) || !view.file) continue;
 			const host = view.contentEl;
+			if (preferences.display === "hidden") {
+				host.querySelectorAll(".study-time-statistics-note-bar").forEach(element => element.remove());
+				continue;
+			}
 			const target = this.getScrollableNoteTarget(view, host);
 			let bar = host.querySelector<HTMLElement>(".study-time-statistics-note-bar");
 			if (!bar) {
 				bar = target.createDiv({cls: "study-time-statistics-note-bar"});
 			}
-			if (bar.parentElement !== target) target.prepend(bar);
+			if (preferences.position === "bottom" && target.lastElementChild !== bar) target.append(bar);
+			if (preferences.position === "top" && target.firstElementChild !== bar) target.prepend(bar);
+			bar.classList.toggle("study-time-statistics-note-bar-compact", preferences.display === "compact");
 
 			const record = this.dataManager.getReadRecord(view.file.path);
 			const openCount = Math.max(0, Number(record?.openCount) || 0);
@@ -52,6 +60,11 @@ export class NoteStatsBarManager {
 			bar.replaceChildren();
 			this.addMetric(bar, I18n.t("inlineOpenCount"), I18n.t("times", {count: openCount}));
 			this.addMetric(bar, I18n.t("inlineTotalTime"), TimeUtils.getPreciseFormattedReadingTime(duration));
+			if (preferences.display === "compact") {
+				bar.title = `${I18n.t("inlineOpenCount")}：${openCount} · ${I18n.t("inlineTotalTime")}：${TimeUtils.getPreciseFormattedReadingTime(duration)} · ${I18n.t("inlineAverageTime")}：${TimeUtils.getPreciseFormattedReadingTime(average)}`;
+				continue;
+			}
+			bar.removeAttribute("title");
 			this.addMetric(bar, I18n.t("inlineAverageTime"), TimeUtils.getPreciseFormattedReadingTime(average));
 			this.addMetric(bar, I18n.t("inlineLongestSession"), TimeUtils.getPreciseFormattedReadingTime(extended?.longestSession || 0));
 			this.addMetric(bar, I18n.t("inlineActiveDays"), I18n.t("days", {count: extended?.activeDays || 0}));

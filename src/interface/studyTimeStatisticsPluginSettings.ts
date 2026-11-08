@@ -1,3 +1,3 @@
 export interface StudyTimeStatisticsPluginSettings {
-	mySetting: string;
+	noteBarDisplay: "hidden" | "compact" | "full";
 }
