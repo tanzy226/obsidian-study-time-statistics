@@ -4,7 +4,7 @@
 
 Study Time Statistics helps you see where your reading time goes in Obsidian. It tracks time and opens for notes and PDFs, shows a small statistics strip inside each Markdown note, and turns your local history into trends, rankings, and a study-investment map. You can optionally record how much of a note you read. It never writes statistics into your Markdown content.
 
-**The current public release is 2.6.1.** This branch also contains the 3.0.0 development work; see the [release roadmap](ROADMAP.md).
+**This guide covers the 3.0.0 release.** See the [release roadmap](ROADMAP.md) for the release policy.
 
 ![Actual Study Time Statistics analytics overview with private note details excluded](assets/analytics-overview-2026-10-02.png)
 
