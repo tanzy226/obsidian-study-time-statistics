@@ -6,10 +6,11 @@ import {ReadingProgressEntry, ReadingProgressInput} from "../interface/readingPr
 import {clampPercent, createProgressId} from "../util/readingProgressUtils";
 import {repairSessions} from "../util/dataHealth";
 import {DEFAULT_TRACKING_PRECISION, normalizeTrackingPrecision, TrackingPrecisionSettings} from "../util/trackingPrecision";
+import {createStudyEvent, latestEventsByEntity, legacySessionEvent, mergeStudyEvents, parseStudyEvent, StudyEvent} from "./studyEventEngine";
 import {normalizeVisualizationColor, normalizeVisualizationColorMode, VisualizationAppearance} from "../util/visualizationAppearance";
 import {localDateKey, splitDurationByLocalDay} from "../util/timeBuckets";
 
-export const CURRENT_DATA_VERSION = 6;
+export const CURRENT_DATA_VERSION = 7;
 export type NoteBarDisplay = "hidden" | "compact" | "full";
 export type NoteBarPosition = "top" | "bottom";
 export function normalizeNoteBarDisplay(value: unknown): NoteBarDisplay {
@@ -26,9 +27,12 @@ export interface DailyReadData {
 
 interface PluginData {
 	dataVersion: number;
+	updatedAt: number;
 	readData: Record<string, ReadRecord>;
 	dailyData: Record<string, DailyReadData>;
 	progressEntries: ReadingProgressEntry[];
+	deviceId: string;
+	eventLog: StudyEvent[];
 	settings: {
 		strictMode?: boolean;
 		progressTrackingEnabled?: boolean;
@@ -51,7 +55,7 @@ export interface ManualSessionInput {
 }
 
 function emptyPluginData(): PluginData {
-	return {dataVersion: CURRENT_DATA_VERSION, readData: {}, dailyData: {}, progressEntries: [], settings: {}};
+	return {dataVersion: CURRENT_DATA_VERSION, updatedAt: 0, readData: {}, dailyData: {}, progressEntries: [], deviceId: "", eventLog: [], settings: {}};
 }
 
 function asObject(value: unknown): Record<string, unknown> | undefined {
@@ -179,13 +183,18 @@ function parsePluginData(value: unknown): PluginData {
 	const visualizationColorMode = normalizeVisualizationColorMode(rawSettings?.visualizationColorMode);
 	const visualizationCustomColor = normalizeVisualizationColor(rawSettings?.visualizationCustomColor);
 	const rawProgressEntries = source.progressEntries;
+	const parsedEvents = Array.isArray(source.eventLog) ? source.eventLog.map(parseStudyEvent).filter((event): event is StudyEvent => event !== undefined) : [];
+	const migratedEvents = parsedEvents.length ? parsedEvents : Object.values(dailyData).flatMap(day => day.sessions.map(session => legacySessionEvent(session, session)));
 	return {
 		dataVersion: CURRENT_DATA_VERSION,
+		updatedAt: Math.max(0, finiteNumber(source.updatedAt)),
 		readData: parseReadData(source.readData),
 		dailyData,
 		progressEntries: Array.isArray(rawProgressEntries)
 			? rawProgressEntries.map(parseProgressEntry).filter((entry): entry is ReadingProgressEntry => entry !== undefined)
 			: [],
+		deviceId: typeof source.deviceId === "string" ? source.deviceId : "",
+		eventLog: mergeStudyEvents(migratedEvents),
 		settings: {
 			...(typeof strictMode === "boolean" ? {strictMode} : {}),
 			...(typeof progressTrackingEnabled === "boolean" ? {progressTrackingEnabled} : {}),
@@ -206,6 +215,7 @@ export class PluginDataManager {
 	private mutationQueue: Promise<void> = Promise.resolve();
 	private revision = 0;
 	private readonly changeListeners = new Set<() => void>();
+	private runtimeDeviceId = "";
 
 	constructor(private readonly plugin: Plugin) {}
 
@@ -219,6 +229,26 @@ export class PluginDataManager {
 		await this.loadUnlocked();
 	}
 
+	public async ensureDeviceId(): Promise<string> {
+		if (!this.runtimeDeviceId) {
+			const storageKey = "study-time-statistics-device-id";
+			try {
+				const storage = typeof window === "undefined" ? undefined : window.localStorage;
+				this.runtimeDeviceId = storage?.getItem(storageKey) ?? "";
+				if (!this.runtimeDeviceId) {
+					this.runtimeDeviceId = `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+					storage?.setItem(storageKey, this.runtimeDeviceId);
+				}
+			} catch {
+				this.runtimeDeviceId = `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+			}
+		}
+		return this.mutate(data => {
+			data.deviceId = this.runtimeDeviceId;
+			return this.runtimeDeviceId;
+		});
+	}
+
 	private async saveUnlocked(): Promise<void> {
 		await this.plugin.saveData(this.data);
 	}
@@ -226,7 +256,9 @@ export class PluginDataManager {
 	private mutate<T>(operation: (data: PluginData) => T | Promise<T>): Promise<T> {
 		const task = this.mutationQueue.then(async () => {
 			await this.loadUnlocked();
+			if (this.runtimeDeviceId) this.data.deviceId = this.runtimeDeviceId;
 			const result = await operation(this.data);
+			this.data.updatedAt = Math.max(Date.now(), this.data.updatedAt + 1);
 			await this.saveUnlocked();
 			this.revision += 1;
 			for (const listener of this.changeListeners) {
@@ -425,7 +457,10 @@ export class PluginDataManager {
 			createdAt: now,
 			updatedAt: now
 		};
-		await this.mutate(data => { data.progressEntries.push(entry); });
+		await this.mutate(data => {
+			data.progressEntries.push(entry);
+			this.appendEvent(data, "progress", entry.id, "upsert", entry.fileId, entry);
+		});
 		return {...entry};
 	}
 
@@ -447,6 +482,7 @@ export class PluginDataManager {
 				updatedAt: Date.now()
 			};
 			data.progressEntries[index] = updated;
+			this.appendEvent(data, "progress", updated.id, "upsert", updated.fileId, updated);
 			return {...updated};
 		});
 	}
@@ -454,7 +490,9 @@ export class PluginDataManager {
 	public async deleteProgressEntry(id: string): Promise<boolean> {
 		return this.mutate(data => {
 			const originalLength = data.progressEntries.length;
+			const existing = data.progressEntries.find(entry => entry.id === id);
 			data.progressEntries = data.progressEntries.filter(entry => entry.id !== id);
+			if (existing) this.appendEvent(data, "progress", id, "delete", existing.fileId);
 			return data.progressEntries.length !== originalLength;
 		});
 	}
@@ -463,17 +501,27 @@ export class PluginDataManager {
 		if (!oldPath || !newPath || oldPath === newPath) return;
 		await this.mutate(data => {
 			const record = data.readData[oldPath];
+			const changedAt = Date.now();
 			if (record) {
 				delete data.readData[oldPath];
 				data.readData[newPath] = {...record, filePath: newPath};
 			}
 			for (const daily of Object.values(data.dailyData)) {
-				for (const session of daily.sessions) if (session.filePath === oldPath) session.filePath = newPath;
+				for (const session of daily.sessions) if (session.filePath === oldPath) {
+					session.filePath = newPath;
+					session.updatedAt = changedAt;
+					this.appendEvent(data, "session", session.id, "upsert", session.fileId, session);
+				}
 				for (const dailyRecord of Object.values(daily.dailyReadData)) {
 					if (dailyRecord.filePath === oldPath) dailyRecord.filePath = newPath;
 				}
 			}
-			for (const entry of data.progressEntries) if (entry.filePath === oldPath) entry.filePath = newPath;
+			for (const entry of data.progressEntries) if (entry.filePath === oldPath) {
+				entry.filePath = newPath;
+				entry.updatedAt = changedAt;
+				this.appendEvent(data, "progress", entry.id, "upsert", entry.fileId, entry);
+			}
+			this.appendEvent(data, "note", record?.fileId ?? oldPath, "rename", record?.fileId, {oldPath, newPath});
 		});
 	}
 
@@ -553,6 +601,7 @@ export class PluginDataManager {
 			const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
 			if (!daily.sessions.some(candidate => candidate.id === session.id)) daily.sessions.push({...session});
 			data.dailyData[date] = daily;
+			this.appendEvent(data, "session", session.id, "upsert", session.fileId, session);
 		});
 	}
 
@@ -572,6 +621,7 @@ export class PluginDataManager {
 		await this.mutate(data => {
 			this.applySessionDelta(data, session, 1);
 			this.addSessionToDay(data, session);
+			this.appendEvent(data, "session", session.id, "upsert", session.fileId, session);
 		});
 		return session;
 	}
@@ -594,6 +644,7 @@ export class PluginDataManager {
 			this.applySessionDelta(data, existing, -1);
 			this.applySessionDelta(data, updated, 1);
 			this.addSessionToDay(data, updated);
+			this.appendEvent(data, "session", updated.id, "upsert", updated.fileId, updated);
 			return {...updated};
 		});
 	}
@@ -604,6 +655,7 @@ export class PluginDataManager {
 			if (!existing) return false;
 			this.removeSessionFromDay(data, id);
 			this.applySessionDelta(data, existing, -1);
+			this.appendEvent(data, "session", existing.id, "delete", existing.fileId);
 			return true;
 		});
 	}
@@ -614,12 +666,201 @@ export class PluginDataManager {
 			if (!session) return false;
 			session.engagement = engagement;
 			session.updatedAt = Date.now();
+			this.appendEvent(data, "session", session.id, "upsert", session.fileId, session);
 			return true;
 		});
 	}
 
 	public exportData(): unknown {
 		return structuredClone(this.data);
+	}
+
+	public getStudyEvents(): StudyEvent[] {
+		return this.data.eventLog.map(event => structuredClone(event));
+	}
+
+	public async mergeData(value: unknown): Promise<{eventsAdded: number; sessionsAdded: number; progressAdded: number}> {
+		const wrapper = asObject(value);
+		const unwrapped = wrapper && asObject(wrapper.pluginData) ? wrapper.pluginData : value;
+		await this.validateImport(unwrapped);
+		const incoming = parsePluginData(unwrapped);
+		return this.mutate(data => {
+			type Aggregate = {duration: number; count: number; fileId: string; filePath: string; first?: number; last?: number};
+			const uniqueSessions = (snapshot: PluginData): StudySession[] => {
+				const result = new Map<string, StudySession>();
+				for (const session of Object.values(snapshot.dailyData).flatMap(day => day.sessions)) {
+					const existing = result.get(session.id);
+					if (!existing || session.updatedAt > existing.updatedAt) result.set(session.id, {...session});
+				}
+				return [...result.values()];
+			};
+			const totalsFor = (sessions: StudySession[]) => {
+				const total = new Map<string, Aggregate>();
+				const daily = new Map<string, Map<string, Aggregate>>();
+				for (const session of sessions) {
+					const aggregate = total.get(session.fileId) ?? {duration: 0, count: 0, fileId: session.fileId, filePath: session.filePath, first: session.openedAt, last: session.openedAt};
+					aggregate.duration += session.duration;
+					aggregate.count++;
+					aggregate.filePath = session.filePath;
+					aggregate.first = Math.min(aggregate.first ?? session.openedAt, session.openedAt);
+					aggregate.last = Math.max(aggregate.last ?? session.openedAt, session.openedAt);
+					total.set(session.fileId, aggregate);
+					for (const slice of splitDurationByLocalDay(session.openedAt, session.duration)) {
+						const day = daily.get(slice.key) ?? new Map<string, Aggregate>();
+						const point = day.get(session.fileId) ?? {duration: 0, count: 0, fileId: session.fileId, filePath: session.filePath};
+						point.duration += slice.duration;
+						if (slice.key === localDateKey(session.openedAt)) point.count++;
+						day.set(session.fileId, point);
+						daily.set(slice.key, day);
+					}
+				}
+				return {total, daily};
+			};
+			const residualsFor = (snapshot: PluginData) => {
+				const sessionTotals = totalsFor(uniqueSessions(snapshot));
+				const total = new Map<string, Aggregate>();
+				for (const [path, record] of Object.entries(snapshot.readData)) {
+					const tracked = sessionTotals.total.get(record.fileId);
+					const residual: Aggregate = {
+						fileId: record.fileId,
+						filePath: record.filePath || path,
+						duration: Math.max(0, record.duration - (tracked?.duration ?? 0)),
+						count: Math.max(0, record.openCount - (tracked?.count ?? 0)),
+						...(record.firstOpenedAt !== undefined ? {first: record.firstOpenedAt} : {}),
+						...(record.lastOpenedAt !== undefined ? {last: record.lastOpenedAt} : {})
+					};
+					const existing = total.get(record.fileId);
+					if (!existing || residual.duration > existing.duration || residual.count > existing.count) total.set(record.fileId, residual);
+				}
+				const daily = new Map<string, Map<string, Aggregate>>();
+				for (const [date, day] of Object.entries(snapshot.dailyData)) {
+					const values = new Map<string, Aggregate>();
+					for (const [fileId, record] of Object.entries(day.dailyReadData)) {
+						const tracked = sessionTotals.daily.get(date)?.get(fileId);
+						values.set(fileId, {
+							fileId,
+							filePath: record.filePath || snapshot.readData[record.filePath]?.filePath || "",
+							duration: Math.max(0, record.duration - (tracked?.duration ?? 0)),
+							count: Math.max(0, record.openCount - (tracked?.count ?? 0))
+						});
+					}
+					daily.set(date, values);
+				}
+				return {total, daily};
+			};
+			const mergeAggregateMaps = (current: Map<string, Aggregate>, other: Map<string, Aggregate>, preferCurrent: boolean | undefined): Map<string, Aggregate> => {
+				const result = new Map<string, Aggregate>();
+				for (const key of new Set([...current.keys(), ...other.keys()])) {
+					const left = current.get(key);
+					const right = other.get(key);
+					if (!left && right) result.set(key, {...right});
+					else if (left && !right) result.set(key, {...left});
+					else if (left && right && preferCurrent !== undefined) result.set(key, {...(preferCurrent ? left : right)});
+					else if (left && right) result.set(key, {
+						fileId: key,
+						filePath: (right.last ?? 0) > (left.last ?? 0) ? right.filePath : left.filePath,
+						duration: Math.max(left.duration, right.duration),
+						count: Math.max(left.count, right.count),
+						...([left.first, right.first].filter((item): item is number => item !== undefined).length ? {first: Math.min(...[left.first, right.first].filter((item): item is number => item !== undefined))} : {}),
+						...(Math.max(left.last ?? 0, right.last ?? 0) > 0 ? {last: Math.max(left.last ?? 0, right.last ?? 0)} : {})
+					});
+				}
+				return result;
+			};
+
+			const originalEvents = data.eventLog.length;
+			const currentSessions = uniqueSessions(data);
+			const incomingSessions = uniqueSessions(incoming);
+			const originalSessions = currentSessions.length;
+			const originalProgress = data.progressEntries.length;
+			const currentResiduals = residualsFor(data);
+			const incomingResiduals = residualsFor(incoming);
+			const sameDevice = Boolean(data.deviceId && data.deviceId === incoming.deviceId);
+			const preferCurrent = sameDevice ? data.updatedAt >= incoming.updatedAt : undefined;
+			data.eventLog = mergeStudyEvents(data.eventLog, incoming.eventLog);
+			const sessions = new Map<string, StudySession>();
+			for (const session of [...currentSessions, ...incomingSessions]) {
+				const existing = sessions.get(session.id);
+				if (!existing || session.updatedAt > existing.updatedAt) sessions.set(session.id, {...session});
+			}
+			const latestEvents = latestEventsByEntity(data.eventLog);
+			for (const [key, event] of latestEvents) {
+				if (!key.startsWith("session:")) continue;
+				if (event.operation === "delete") sessions.delete(event.entityId);
+				else {
+					const parsed = parseStudySession(event.payload);
+					if (parsed) sessions.set(parsed.id, parsed);
+				}
+			}
+			const progress = new Map(data.progressEntries.map(entry => [entry.id, entry]));
+			for (const entry of incoming.progressEntries) {
+				const existing = progress.get(entry.id);
+				if (!existing || entry.updatedAt > existing.updatedAt) progress.set(entry.id, {...entry});
+			}
+			for (const [key, event] of latestEvents) {
+				if (!key.startsWith("progress:")) continue;
+				if (event.operation === "delete") progress.delete(event.entityId);
+				else {
+					const parsed = parseProgressEntry(event.payload);
+					if (parsed) progress.set(parsed.id, parsed);
+				}
+			}
+
+			const preferredPaths = new Map<string, {path: string; changedAt: number}>();
+			const considerPath = (fileId: string, path: string, changedAt: number) => {
+				if (!path) return;
+				const existing = preferredPaths.get(fileId);
+				if (!existing || changedAt >= existing.changedAt) preferredPaths.set(fileId, {path, changedAt});
+			};
+			for (const item of [...currentResiduals.total.values(), ...incomingResiduals.total.values()]) considerPath(item.fileId, item.filePath, item.last ?? 0);
+			for (const session of sessions.values()) considerPath(session.fileId, session.filePath, session.updatedAt);
+			for (const entry of progress.values()) considerPath(entry.fileId, entry.filePath, entry.updatedAt);
+			for (const event of data.eventLog) {
+				if (event.entity !== "note" || event.operation !== "rename") continue;
+				const payload = asObject(event.payload);
+				if (event.fileId && typeof payload?.newPath === "string") considerPath(event.fileId, payload.newPath, event.timestamp);
+			}
+			for (const session of sessions.values()) session.filePath = preferredPaths.get(session.fileId)?.path ?? session.filePath;
+			for (const entry of progress.values()) entry.filePath = preferredPaths.get(entry.fileId)?.path ?? entry.filePath;
+			data.progressEntries = [...progress.values()];
+
+			const mergedSessionTotals = totalsFor([...sessions.values()]);
+			const residualTotals = mergeAggregateMaps(currentResiduals.total, incomingResiduals.total, preferCurrent);
+			data.readData = {};
+			for (const fileId of new Set([...residualTotals.keys(), ...mergedSessionTotals.total.keys()])) {
+				const base = residualTotals.get(fileId);
+				const tracked = mergedSessionTotals.total.get(fileId);
+				const path = preferredPaths.get(fileId)?.path ?? tracked?.filePath ?? base?.filePath ?? "";
+				if (!path) continue;
+				const firstValues = [base?.first, tracked?.first].filter((item): item is number => item !== undefined);
+				const last = Math.max(base?.last ?? 0, tracked?.last ?? 0);
+				data.readData[path] = {
+					fileId,
+					filePath: path,
+					duration: (base?.duration ?? 0) + (tracked?.duration ?? 0),
+					openCount: (base?.count ?? 0) + (tracked?.count ?? 0),
+					...(firstValues.length ? {firstOpenedAt: Math.min(...firstValues)} : {}),
+					...(last > 0 ? {lastOpenedAt: last} : {})
+				};
+			}
+
+			data.dailyData = {};
+			const dates = new Set([...currentResiduals.daily.keys(), ...incomingResiduals.daily.keys(), ...mergedSessionTotals.daily.keys()]);
+			for (const date of dates) {
+				const residual = mergeAggregateMaps(currentResiduals.daily.get(date) ?? new Map<string, Aggregate>(), incomingResiduals.daily.get(date) ?? new Map<string, Aggregate>(), preferCurrent);
+				const tracked = mergedSessionTotals.daily.get(date) ?? new Map<string, Aggregate>();
+				const day: DailyReadData = {dailyReadData: {}, sessions: []};
+				for (const fileId of new Set([...residual.keys(), ...tracked.keys()])) {
+					const base = residual.get(fileId);
+					const sessionTotal = tracked.get(fileId);
+					const path = preferredPaths.get(fileId)?.path ?? sessionTotal?.filePath ?? base?.filePath ?? "";
+					day.dailyReadData[fileId] = {fileId, filePath: path, duration: (base?.duration ?? 0) + (sessionTotal?.duration ?? 0), openCount: (base?.count ?? 0) + (sessionTotal?.count ?? 0)};
+				}
+				data.dailyData[date] = day;
+			}
+			for (const session of sessions.values()) this.addSessionToDay(data, session);
+			return {eventsAdded: data.eventLog.length - originalEvents, sessionsAdded: Math.max(0, sessions.size - originalSessions), progressAdded: Math.max(0, data.progressEntries.length - originalProgress)};
+		});
 	}
 
 	public async validateImport(value: unknown): Promise<void> {
@@ -642,6 +883,19 @@ export class PluginDataManager {
 		if (source.progressEntries !== undefined && (!Array.isArray(source.progressEntries) || source.progressEntries.some(entry => parseProgressEntry(entry) === undefined))) {
 			throw new Error("Invalid Study Time Statistics progress record");
 		}
+		if (source.eventLog !== undefined) {
+			if (!Array.isArray(source.eventLog)) throw new Error("Invalid Study Time Statistics event log");
+			for (const candidate of source.eventLog) {
+				const event = parseStudyEvent(candidate);
+				if (!event) throw new Error("Invalid Study Time Statistics event record");
+				if (event.operation === "upsert" && event.entity === "session" && !parseStudySession(event.payload)) throw new Error("Invalid Study Time Statistics session event");
+				if (event.operation === "upsert" && event.entity === "progress" && !parseProgressEntry(event.payload)) throw new Error("Invalid Study Time Statistics progress event");
+				if (event.operation === "rename") {
+					const payload = asObject(event.payload);
+					if (event.entity !== "note" || typeof payload?.oldPath !== "string" || typeof payload.newPath !== "string" || !payload.newPath) throw new Error("Invalid Study Time Statistics rename event");
+				}
+			}
+		}
 	}
 
 	public async importData(value: unknown): Promise<void> {
@@ -652,6 +906,8 @@ export class PluginDataManager {
 			data.readData = parsed.readData;
 			data.dailyData = parsed.dailyData;
 			data.progressEntries = parsed.progressEntries;
+			data.deviceId = parsed.deviceId || data.deviceId;
+			data.eventLog = parsed.eventLog;
 			data.settings = parsed.settings;
 		});
 	}
@@ -662,6 +918,13 @@ export class PluginDataManager {
 			if (session) return session;
 		}
 		return undefined;
+	}
+
+	private appendEvent(data: PluginData, entity: StudyEvent["entity"], entityId: string, operation: StudyEvent["operation"], fileId?: string, payload?: unknown): void {
+		data.deviceId = this.runtimeDeviceId || data.deviceId || `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+		const lastTimestamp = data.eventLog[data.eventLog.length - 1]?.timestamp ?? 0;
+		const timestamp = Math.max(Date.now(), lastTimestamp + 1);
+		data.eventLog.push(createStudyEvent({deviceId: data.deviceId, timestamp, entity, entityId, operation, ...(fileId ? {fileId} : {}), ...(payload !== undefined ? {payload: structuredClone(payload)} : {})}));
 	}
 
 	private addSessionToDay(data: PluginData, session: StudySession): void {

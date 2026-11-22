@@ -171,6 +171,88 @@ test("completed automatic sessions do not double-count time already tracked", as
 	assert.equal(manager.getReadRecord("A.md")?.duration, 6_000);
 	assert.equal(manager.getReadRecord("A.md")?.openCount, 1);
 	assert.equal(manager.getSessions().length, 1);
+	assert.equal(manager.getStudyEvents().some(event => event.entityId === "session-a"), true);
+});
+
+test("3.0 snapshot merge keeps unique records and an auditable event log", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	await manager.ensureDeviceId();
+	await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt: 1000, duration: 500});
+	const snapshot = manager.exportData();
+	const before = manager.getStudyEvents().length;
+	const result = await manager.mergeData(snapshot);
+	assert.equal(result.eventsAdded, 0);
+	assert.equal(manager.getSessions().length, 1);
+	assert.equal(manager.getStudyEvents().length, before);
+});
+
+test("3.0 snapshot merge keeps session, total, and daily durations consistent", async () => {
+	const first = createManager({readData: {}, dailyData: {}, settings: {}}).manager;
+	const second = createManager({readData: {}, dailyData: {}, settings: {}}).manager;
+	await first.loadData();
+	await second.loadData();
+	await first.ensureDeviceId();
+	await second.ensureDeviceId();
+	const openedAt = new Date(2026, 8, 1, 10).getTime();
+	await first.createManualSession({fileId: "a", filePath: "A.md", openedAt, duration: 10 * 60_000});
+	await second.createManualSession({fileId: "a", filePath: "A.md", openedAt: openedAt + 1000, duration: 20 * 60_000});
+	await first.mergeData(second.exportData());
+	const sessionDuration = first.getSessions().reduce((sum, session) => sum + session.duration, 0);
+	const dailyDuration = Object.values(first.getDailyReadData("2026-9-1")?.dailyReadData ?? {}).reduce((sum, record) => sum + record.duration, 0);
+	assert.equal(sessionDuration, 30 * 60_000);
+	assert.equal(first.getReadRecord("A.md")?.duration, sessionDuration);
+	assert.equal(dailyDuration, sessionDuration);
+});
+
+test("3.0 events preserve engagement changes and renamed paths after merge", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	await manager.ensureDeviceId();
+	const session = await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt: 1000, duration: 60_000});
+	await manager.setSessionEngagement(session.id, "quiet-study");
+	await manager.renameFilePath("A.md", "Renamed.md");
+	await manager.mergeData(manager.exportData());
+	assert.equal(manager.getSession(session.id)?.engagement, "quiet-study");
+	assert.equal(manager.getSession(session.id)?.filePath, "Renamed.md");
+});
+
+test("3.0 merge keeps deleted sessions deleted without residual totals", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	await manager.ensureDeviceId();
+	const openedAt = new Date(2026, 8, 1, 10).getTime();
+	const session = await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt, duration: 10 * 60_000});
+	const oldSnapshot = manager.exportData();
+	await manager.deleteSession(session.id);
+	await manager.mergeData(oldSnapshot);
+	assert.equal(manager.getSessions().length, 0);
+	assert.equal(manager.getReadRecord("A.md")?.duration, 0);
+	assert.equal(manager.getDailyReadData("2026-9-1")?.dailyReadData.a?.duration, 0);
+});
+
+test("3.0 merge accepts the plugin's own backup wrapper", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	await manager.ensureDeviceId();
+	await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt: 1_000, duration: 500});
+	const snapshot = manager.exportData();
+	const result = await manager.mergeData({format: "study-time-statistics-backup", version: 1, createdAt: 2_000, pluginData: snapshot});
+	assert.equal(result.sessionsAdded, 0);
+	assert.equal(manager.getSessions().length, 1);
+});
+
+test("3.0 merge does not resurrect a path from before a rename", async () => {
+	const {manager} = createManager({readData: {}, dailyData: {}, settings: {}});
+	await manager.loadData();
+	await manager.ensureDeviceId();
+	await manager.createManualSession({fileId: "a", filePath: "A.md", openedAt: 1_000, duration: 500});
+	const oldSnapshot = manager.exportData();
+	await manager.renameFilePath("A.md", "Renamed.md");
+	await manager.mergeData(oldSnapshot);
+	assert.equal(manager.getReadRecord("A.md"), undefined);
+	assert.equal(manager.getReadRecord("Renamed.md")?.duration, 500);
+	assert.equal(manager.getSessions()[0]?.filePath, "Renamed.md");
 });
 
 test("safe session repair keeps aggregate totals consistent", async () => {
@@ -230,6 +312,11 @@ test("invalid imports are rejected without replacing current data", async () => 
 	});
 	await manager.loadData();
 	await assert.rejects(manager.importData({unexpected: true}));
+	await assert.rejects(manager.importData({
+		readData: {},
+		dailyData: {},
+		eventLog: [{id: "bad", deviceId: "device", timestamp: 1, entity: "session", entityId: "s", operation: "upsert", payload: {broken: true}}]
+	}));
 	assert.equal(manager.getReadRecord("A.md")?.duration, 4_000);
 });
 
