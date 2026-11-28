@@ -1,10 +1,15 @@
 # Changelog
 
-## Unreleased
+## 3.0.1
 
-- Replaced clipped month/day labels in the 30-day charts with a clear relative 1–30 axis; exact calendar dates remain available in each bar's tooltip.
-- Added a bilingual in-plugin feedback center for bug reports, inaccurate statistics, feature requests, and discussions.
-- Kept feedback privacy-preserving: buttons only open GitHub forms, and the plugin never submits study data automatically.
+- Added safeguards for local snapshot merges, session corrections, backup retention, and restores. See the [3.0.1 release notes](.github/release-notes/3.0.1.md) for details.
+- Updated the English and Chinese guides.
+
+See [GitHub Releases](https://github.com/tanzy226/obsidian-study-time-statistics/releases) for other 3.0 and 2.x updates.
+
+## 2.2.0 — 2026-10-01
+
+- Replaced clipped month/day labels in the 30-day charts with a relative 1–30 axis; exact dates remain available in each bar's tooltip.
 
 ## 2.1.0 — 2026-09-16
 
@@ -42,6 +47,7 @@
 
 ## 1.2.0 — 2026-08-26
 
+- Added a bilingual feedback center that opens GitHub forms for bug reports, inaccurate statistics, feature requests, and discussions without submitting local study data.
 - Added optional, self-reported Reading Coverage without presenting it as absorption, understanding, memory, or mastery.
 - Added per-reading coverage entries with correction and deletion, capped cumulative note coverage, and character-count snapshots.
 - Added note and folder coverage summaries, a 365-day coverage heatmap, hourly coverage patterns, estimated covered characters, and character-based reading pace.

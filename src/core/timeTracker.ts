@@ -11,6 +11,7 @@ import {Context} from "../context/context";
 import {createSessionId} from "../util/sessionUtils";
 import {classifySessionEngagement} from "../util/activityClassifier";
 import {isIdle} from "../util/trackingPrecision";
+import {DataSafetyError} from "./dataSafetyError";
 
 export class TimeTracker {
 	private readonly app: App;
@@ -78,9 +79,10 @@ export class TimeTracker {
 			if (currentFile === activeFile) return;
 
 			await this.finishCurrentSession();
-			Context.setCurrentFile(activeFile);
+			Context.setCurrentFile(null);
 			if (activeFile) {
 				const record = await this.incTotalReadCount(activeFile);
+				Context.setCurrentFile(activeFile);
 				const openedAt = Date.now();
 				this.currentSession = {
 					id: createSessionId(openedAt),
@@ -138,10 +140,11 @@ export class TimeTracker {
 		const currentFile = Context.getCurrentFile();
 		if (!currentFile || this.needSuspendTimer() || elapsed < 1) return;
 
-		const fileId = this.getFileId(currentFile.path);
+		const path = this.currentSession?.filePath ?? currentFile.path;
+		const fileId = this.getFileId(path);
 		if (!fileId) return;
-		await this.dataManager.addTrackedTime(currentFile.path, fileId, elapsed, now);
-		if (this.currentSession && this.currentSession.filePath === currentFile.path) {
+		await this.dataManager.addTrackedTime(path, fileId, elapsed, now);
+		if (this.currentSession && this.currentSession.filePath === path) {
 			this.currentSession.duration += elapsed;
 		}
 	}
@@ -160,8 +163,30 @@ export class TimeTracker {
 		return this.dataManager.recordFileOpened(file.path, this.getOrCreateFileId(file.path), openedAt);
 	}
 
-	public handleFileRename(oldPath: string, newPath: string): void {
-		if (this.currentSession?.filePath === oldPath) this.currentSession.filePath = newPath;
+	public withFileRename(oldPath: string, newPath: string, folder: boolean, action: () => Promise<void>): Promise<void> {
+		const task = this.operationQueue.then(async () => {
+			const path = this.currentSession?.filePath;
+			const affected = path && (path === oldPath || (folder && path.startsWith(`${oldPath}/`)));
+			try {
+				await action();
+				if (affected && this.currentSession) this.currentSession.filePath = newPath + path.slice(oldPath.length);
+			} catch (error) {
+				if (affected) {
+					try {
+						await this.finishCurrentSession();
+					} catch (closeError) {
+						console.error("Study Time Statistics could not close the session at its original path", closeError);
+					} finally {
+						this.currentSession = null;
+						Context.setCurrentFile(null);
+						this.lastRefreshAt = Date.now();
+					}
+				}
+				throw error;
+			}
+		});
+		this.operationQueue = task.catch(() => undefined);
+		return task;
 	}
 
 	private async finishCurrentSession() {
@@ -173,8 +198,34 @@ export class TimeTracker {
 			updatedAt: closedAt,
 			engagement: classifySessionEngagement(this.currentSession)
 		};
-		this.currentSession = null;
-		await this.dailyReadDataManager.saveSession(session);
+		try {
+			await this.dailyReadDataManager.saveSession(session);
+			this.currentSession = null;
+		} catch (error) {
+			if (!(error instanceof DataSafetyError) || error.reason !== "invalid-snapshot") throw error;
+			// The accumulated ticks are already saved; do not write an invalid session over them.
+			this.currentSession = null;
+			console.warn("Study Time Statistics kept tracked time but could not close an out-of-range session");
+		}
+	}
+
+	public async withHistoryReplacement(action: () => Promise<void>): Promise<void> {
+		const task = this.operationQueue.then(async () => {
+			await this.flushElapsed();
+			await this.finishCurrentSession();
+			try {
+				await action();
+			} finally {
+				Context.setCurrentFile(null);
+				this.lastRefreshAt = Date.now();
+			}
+		});
+		this.operationQueue = task.catch(() => undefined);
+		try {
+			await task;
+		} finally {
+			void this.handleFileChange();
+		}
 	}
 
 	public getTotalReadData(file: TFile): ReadRecord | undefined {

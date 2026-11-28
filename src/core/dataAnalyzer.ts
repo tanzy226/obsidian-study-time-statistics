@@ -1,4 +1,4 @@
-import {App, Plugin, TFile, TFolder} from "obsidian";
+import type {App} from "obsidian";
 import {ReadRecord} from "../interface/readRecord";
 import {PluginDataManager} from "./pluginDataManager";
 
@@ -15,22 +15,9 @@ export interface StudyRankingEntry extends LeaderboardEntry {
 
 export class DataAnalyzer {
 	constructor(
-		plugin: Plugin,
 		private readonly app: App,
 		private readonly dataManager: PluginDataManager
-	) {
-		plugin.registerEvent(this.app.vault.on("rename", (abstractFile, oldPath) => {
-			if (abstractFile instanceof TFolder) {
-				void this.onFolderRename(abstractFile, oldPath).catch(error => {
-					console.error("Study Time Statistics failed to update a renamed folder", error);
-				});
-			} else if (abstractFile instanceof TFile) {
-				void this.onFileRename(abstractFile, oldPath).catch(error => {
-					console.error("Study Time Statistics failed to update a renamed file", error);
-				});
-			}
-		}));
-	}
+	) {}
 
 	public analyzeLeaderboardTotal(): LeaderboardEntry[] {
 		const rows = Object.values(this.dataManager.getReadData())
@@ -69,33 +56,4 @@ export class DataAnalyzer {
 		};
 	}
 
-	private async onFileRename(file: TFile, oldPath: string): Promise<void> {
-		const readData = this.dataManager.getReadRecord(oldPath);
-		if (!readData) return;
-
-		await this.dataManager.deleteReadRecord(oldPath);
-		await this.dataManager.setReadRecord(file.path, {...readData, filePath: file.path});
-	}
-
-	private async onFolderRename(folder: TFolder, oldPath: string): Promise<void> {
-		await this.dataManager.loadData();
-		const normalizedOldPath = oldPath.endsWith("/") ? oldPath.slice(0, -1) : oldPath;
-		const filesToUpdate: Array<{oldPath: string; newPath: string; data: ReadRecord}> = [];
-
-		for (const [storedPath, fileData] of Object.entries(this.dataManager.getReadData())) {
-			if (storedPath !== normalizedOldPath && !storedPath.startsWith(`${normalizedOldPath}/`)) continue;
-			const relativePath = storedPath === normalizedOldPath
-				? ""
-				: storedPath.substring(normalizedOldPath.length + 1);
-			const newFilePath = relativePath === "" ? folder.path : `${folder.path}/${relativePath}`;
-			if (this.app.vault.getFileByPath(newFilePath)) {
-				filesToUpdate.push({oldPath: storedPath, newPath: newFilePath, data: fileData});
-			}
-		}
-
-		for (const {oldPath: fileOldPath, newPath: fileNewPath, data} of filesToUpdate) {
-			await this.dataManager.deleteReadRecord(fileOldPath);
-			await this.dataManager.setReadRecord(fileNewPath, {...data, filePath: fileNewPath});
-		}
-	}
 }

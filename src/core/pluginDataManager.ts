@@ -1,7 +1,7 @@
 import type {Plugin} from "obsidian";
 import {ReadRecord} from "../interface/readRecord";
 import {StudySession} from "../interface/studySession";
-import {createLegacySessionId, createSessionId, isStudySessionSource} from "../util/sessionUtils";
+import {createLegacySessionId, createSessionId, isSafeStudyDuration, isSafeStudyInterval, isSafeStudyTimestamp, isStudySessionSource} from "../util/sessionUtils";
 import {ReadingProgressEntry, ReadingProgressInput} from "../interface/readingProgress";
 import {clampPercent, createProgressId} from "../util/readingProgressUtils";
 import {repairSessions} from "../util/dataHealth";
@@ -9,6 +9,7 @@ import {DEFAULT_TRACKING_PRECISION, normalizeTrackingPrecision, TrackingPrecisio
 import {createStudyEvent, latestEventsByEntity, legacySessionEvent, mergeStudyEvents, parseStudyEvent, StudyEvent} from "./studyEventEngine";
 import {normalizeVisualizationColor, normalizeVisualizationColorMode, VisualizationAppearance} from "../util/visualizationAppearance";
 import {localDateKey, splitDurationByLocalDay} from "../util/timeBuckets";
+import {DataSafetyError} from "./dataSafetyError";
 
 export const CURRENT_DATA_VERSION = 7;
 export type NoteBarDisplay = "hidden" | "compact" | "full";
@@ -52,6 +53,41 @@ export interface ManualSessionInput {
 	filePath: string;
 	openedAt: number;
 	duration: number;
+}
+
+type BeforeWrite = (snapshot: unknown) => Promise<unknown>;
+
+function canonicalData(value: unknown): string | undefined {
+	return JSON.stringify(value, (_key, item: unknown) => {
+		const object = asObject(item);
+		return object ? Object.fromEntries(Object.keys(object).sort().map(key => [key, object[key]])) : item;
+	});
+}
+
+function legacyProgressId(entry: Omit<ReadingProgressEntry, "id">): string {
+	const text = canonicalData(entry) ?? "";
+	let first = 2166136261;
+	let second = 5381;
+	for (let index = 0; index < text.length; index++) {
+		const value = text.charCodeAt(index);
+		first = Math.imul(first ^ value, 16777619);
+		second = Math.imul(second, 33) ^ value;
+	}
+	return `legacy-progress-${(first >>> 0).toString(36)}-${(second >>> 0).toString(36)}`;
+}
+
+function isNonNegativeNumber(value: unknown): value is number {
+	return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER;
+}
+
+function isIdentity(value: unknown): value is string {
+	return typeof value === "string" && value.trim().length > 0 && !["__proto__", "constructor", "prototype"].includes(value);
+}
+
+function isDateKey(key: string): boolean {
+	if (!/^\d{4}-\d{1,2}-\d{1,2}$/u.test(key)) return false;
+	const date = new Date(key.split("-").map((part, index) => index ? part.padStart(2, "0") : part).join("-") + "T00:00:00Z");
+	return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === key.split("-").map((part, index) => index ? part.padStart(2, "0") : part).join("-");
 }
 
 function emptyPluginData(): PluginData {
@@ -120,8 +156,7 @@ function parseProgressEntry(value: unknown): ReadingProgressEntry | undefined {
 	const startPosition = typeof source.startPosition === "number" && Number.isFinite(source.startPosition) ? clampPercent(source.startPosition) : undefined;
 	const endPosition = typeof source.endPosition === "number" && Number.isFinite(source.endPosition) ? clampPercent(source.endPosition) : undefined;
 	const hasManualCharacters = typeof source.readCharacters === "number" && Number.isFinite(source.readCharacters);
-	return {
-		id: typeof source.id === "string" && source.id ? source.id : createProgressId(recordedAt),
+	const entry: Omit<ReadingProgressEntry, "id"> = {
 		fileId: source.fileId,
 		filePath: source.filePath,
 		percent,
@@ -135,6 +170,7 @@ function parseProgressEntry(value: unknown): ReadingProgressEntry | undefined {
 		createdAt: Math.max(0, finiteNumber(source.createdAt, recordedAt)),
 		updatedAt: Math.max(0, finiteNumber(source.updatedAt, recordedAt))
 	};
+	return {...entry, id: typeof source.id === "string" && source.id ? source.id : legacyProgressId(entry)};
 }
 
 function parseReadData(value: unknown): Record<string, ReadRecord> {
@@ -184,15 +220,26 @@ function parsePluginData(value: unknown): PluginData {
 	const visualizationCustomColor = normalizeVisualizationColor(rawSettings?.visualizationCustomColor);
 	const rawProgressEntries = source.progressEntries;
 	const parsedEvents = Array.isArray(source.eventLog) ? source.eventLog.map(parseStudyEvent).filter((event): event is StudyEvent => event !== undefined) : [];
-	const migratedEvents = parsedEvents.length ? parsedEvents : Object.values(dailyData).flatMap(day => day.sessions.map(session => legacySessionEvent(session, session)));
+	const eventSessions = new Set(parsedEvents.filter(event => event.entity === "session").map(event => event.entityId));
+	const migratedEvents = [...parsedEvents, ...Object.values(dailyData).flatMap(day => day.sessions
+		.filter(session => !eventSessions.has(session.id)).map(session => legacySessionEvent(session, session)))];
+	const progressOccurrences = new Map<string, number>();
+	const progressEntries = Array.isArray(rawProgressEntries) ? rawProgressEntries.flatMap(value => {
+		const entry = parseProgressEntry(value);
+		if (!entry) return [];
+		if (!asObject(value)?.id) {
+			const occurrence = (progressOccurrences.get(entry.id) ?? 0) + 1;
+			progressOccurrences.set(entry.id, occurrence);
+			entry.id += `-${occurrence}`;
+		}
+		return [entry];
+	}) : [];
 	return {
 		dataVersion: CURRENT_DATA_VERSION,
 		updatedAt: Math.max(0, finiteNumber(source.updatedAt)),
 		readData: parseReadData(source.readData),
 		dailyData,
-		progressEntries: Array.isArray(rawProgressEntries)
-			? rawProgressEntries.map(parseProgressEntry).filter((entry): entry is ReadingProgressEntry => entry !== undefined)
-			: [],
+		progressEntries,
 		deviceId: typeof source.deviceId === "string" ? source.deviceId : "",
 		eventLog: mergeStudyEvents(migratedEvents),
 		settings: {
@@ -216,20 +263,54 @@ export class PluginDataManager {
 	private revision = 0;
 	private readonly changeListeners = new Set<() => void>();
 	private runtimeDeviceId = "";
+	private writeProtection?: DataSafetyError;
+	private uncertainWrite = false;
+	private readonly protectedPaths = new Set<string>();
+	private beforeMigration?: BeforeWrite;
 
 	constructor(private readonly plugin: Plugin) {}
 
-	private async loadUnlocked(): Promise<void> {
-		const loadedData: unknown = await this.plugin.loadData();
-		this.data = parsePluginData(loadedData);
+	private async readStoredData(): Promise<unknown> {
+		try {
+			const loadedData: unknown = await this.plugin.loadData();
+			const dir = this.plugin.manifest?.dir;
+			if (loadedData == null && dir && await this.plugin.app.vault.adapter.exists(`${dir}/data.json`)) {
+				throw new DataSafetyError("unreadable");
+			}
+			return loadedData ?? null;
+		} catch (error) {
+			throw error instanceof DataSafetyError ? error : new DataSafetyError("unreadable", error);
+		}
 	}
 
 	public async loadData(): Promise<void> {
-		await this.mutationQueue;
-		await this.loadUnlocked();
+		const task = this.mutationQueue.then(async () => {
+			if (this.uncertainWrite) return;
+			let raw: unknown;
+			try {
+				raw = await this.readStoredData();
+				if (raw !== null) await this.validateImport(raw);
+				this.data = parsePluginData(raw);
+				this.writeProtection = undefined;
+			} catch (error) {
+				const reason = error instanceof DataSafetyError && error.reason === "future-version" ? "future-version" : "unreadable";
+				this.writeProtection = new DataSafetyError(reason, error);
+				if (reason === "unreadable" && asObject(raw)) this.data = parsePluginData(raw);
+			}
+		});
+		this.mutationQueue = task.then(() => undefined, () => undefined);
+		await task;
 	}
 
-	public async ensureDeviceId(): Promise<string> {
+	public getWriteProtection(): DataSafetyError | undefined {
+		return this.writeProtection;
+	}
+
+	public setMigrationBackup(beforeWrite: BeforeWrite): void {
+		this.beforeMigration = beforeWrite;
+	}
+
+	public ensureDeviceId(): string {
 		if (!this.runtimeDeviceId) {
 			const storageKey = "study-time-statistics-device-id";
 			try {
@@ -243,23 +324,47 @@ export class PluginDataManager {
 				this.runtimeDeviceId = `device-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 			}
 		}
-		return this.mutate(data => {
-			data.deviceId = this.runtimeDeviceId;
-			return this.runtimeDeviceId;
-		});
+		return this.runtimeDeviceId;
 	}
 
-	private async saveUnlocked(): Promise<void> {
-		await this.plugin.saveData(this.data);
-	}
-
-	private mutate<T>(operation: (data: PluginData) => T | Promise<T>): Promise<T> {
+	private mutate<T>(operation: (data: PluginData) => T | Promise<T>, beforeWrite?: BeforeWrite, skipUnchanged = false): Promise<T> {
 		const task = this.mutationQueue.then(async () => {
-			await this.loadUnlocked();
-			if (this.runtimeDeviceId) this.data.deviceId = this.runtimeDeviceId;
-			const result = await operation(this.data);
-			this.data.updatedAt = Math.max(Date.now(), this.data.updatedAt + 1);
-			await this.saveUnlocked();
+			if (this.uncertainWrite) throw new DataSafetyError("write");
+			let raw: unknown;
+			try {
+				raw = await this.readStoredData();
+				if (raw !== null) await this.validateImport(raw);
+				this.writeProtection = undefined;
+			} catch (error) {
+				const reason = error instanceof DataSafetyError && error.reason === "future-version" ? "future-version" : "unreadable";
+				this.writeProtection = new DataSafetyError(reason, error);
+				throw this.writeProtection;
+			}
+			const candidate = parsePluginData(raw);
+			const originalContent = skipUnchanged ? canonicalData(candidate) : undefined;
+			const result = await operation(candidate);
+			if (skipUnchanged && canonicalData(candidate) === originalContent) return result;
+			if (this.runtimeDeviceId) candidate.deviceId = this.runtimeDeviceId;
+			candidate.updatedAt = Math.max(Date.now(), candidate.updatedAt + 1);
+			const backup = beforeWrite ?? (raw !== null && asObject(raw)?.dataVersion !== CURRENT_DATA_VERSION ? this.beforeMigration : undefined);
+			if (backup) {
+				await this.validateImport(candidate);
+				await backup(structuredClone(raw ?? emptyPluginData()));
+				if (canonicalData(await this.readStoredData()) !== canonicalData(raw)) throw new DataSafetyError("changed");
+			}
+			try {
+				await this.plugin.saveData(candidate);
+				if (backup && canonicalData(await this.readStoredData()) !== canonicalData(candidate)) throw new DataSafetyError("write");
+			} catch (error) {
+				this.writeProtection = new DataSafetyError("write", error);
+				try {
+					this.uncertainWrite = canonicalData(await this.readStoredData()) !== canonicalData(raw);
+				} catch {
+					this.uncertainWrite = true;
+				}
+				throw this.writeProtection;
+			}
+			this.data = candidate;
 			this.revision += 1;
 			for (const listener of this.changeListeners) {
 				try {
@@ -329,6 +434,7 @@ export class PluginDataManager {
 
 	public async recordFileOpened(filePath: string, fileId: string, openedAt: number): Promise<ReadRecord> {
 		return this.mutate(data => {
+			this.checkWritablePath(filePath);
 			const current = data.readData[filePath];
 			const record: ReadRecord = {
 				fileId: current?.fileId ?? fileId,
@@ -344,9 +450,13 @@ export class PluginDataManager {
 	}
 
 	public async addTrackedTime(filePath: string, fileId: string, elapsed: number, endedAt: number): Promise<void> {
-		const safeElapsed = Math.max(0, elapsed);
+		const safeElapsed = elapsed;
+		if (!isSafeStudyDuration(safeElapsed) || !isSafeStudyTimestamp(endedAt) || !isSafeStudyInterval(endedAt - safeElapsed, safeElapsed)) {
+			throw new DataSafetyError("invalid-snapshot");
+		}
 		if (safeElapsed < 1) return;
 		await this.mutate(data => {
+			this.checkWritablePath(filePath);
 			const total = data.readData[filePath] ?? {fileId, filePath, duration: 0, openCount: 1};
 			total.fileId = fileId;
 			total.filePath = filePath;
@@ -442,7 +552,7 @@ export class PluginDataManager {
 			.map(entry => ({...entry}));
 	}
 
-	public async createProgressEntry(input: ReadingProgressInput): Promise<ReadingProgressEntry> {
+	public async createProgressEntry(input: ReadingProgressInput, beforeWrite?: BeforeWrite): Promise<ReadingProgressEntry> {
 		const now = Date.now();
 		const entry: ReadingProgressEntry = {
 			...input,
@@ -458,17 +568,20 @@ export class PluginDataManager {
 			updatedAt: now
 		};
 		await this.mutate(data => {
+			this.checkWritablePath(entry.filePath);
 			data.progressEntries.push(entry);
 			this.appendEvent(data, "progress", entry.id, "upsert", entry.fileId, entry);
-		});
+		}, beforeWrite);
 		return {...entry};
 	}
 
-	public async updateProgressEntry(id: string, input: ReadingProgressInput): Promise<ReadingProgressEntry | undefined> {
+	public async updateProgressEntry(id: string, input: ReadingProgressInput, beforeWrite?: BeforeWrite): Promise<ReadingProgressEntry | undefined> {
 		return this.mutate(data => {
 			const index = data.progressEntries.findIndex(entry => entry.id === id);
 			const existing = data.progressEntries[index];
 			if (!existing) return undefined;
+			this.checkWritablePath(existing.filePath);
+			this.checkWritablePath(input.filePath);
 			const updated: ReadingProgressEntry = {
 				...existing,
 				...input,
@@ -484,49 +597,89 @@ export class PluginDataManager {
 			data.progressEntries[index] = updated;
 			this.appendEvent(data, "progress", updated.id, "upsert", updated.fileId, updated);
 			return {...updated};
-		});
+		}, beforeWrite, true);
 	}
 
-	public async deleteProgressEntry(id: string): Promise<boolean> {
+	public async deleteProgressEntry(id: string, beforeWrite?: BeforeWrite): Promise<boolean> {
 		return this.mutate(data => {
 			const originalLength = data.progressEntries.length;
 			const existing = data.progressEntries.find(entry => entry.id === id);
+			if (existing) this.checkWritablePath(existing.filePath);
 			data.progressEntries = data.progressEntries.filter(entry => entry.id !== id);
 			if (existing) this.appendEvent(data, "progress", id, "delete", existing.fileId);
 			return data.progressEntries.length !== originalLength;
-		});
+		}, beforeWrite, true);
 	}
 
-	public async renameFilePath(oldPath: string, newPath: string): Promise<void> {
+	private checkWritablePath(path: string): void {
+		if ([...this.protectedPaths].some(prefix => path === prefix || path.startsWith(`${prefix}/`))) throw new DataSafetyError("ambiguous");
+	}
+
+	public async renameFilePath(oldPath: string, newPath: string, folder = false, beforeWrite?: BeforeWrite): Promise<void> {
 		if (!oldPath || !newPath || oldPath === newPath) return;
-		await this.mutate(data => {
-			const record = data.readData[oldPath];
-			const changedAt = Date.now();
-			if (record) {
-				delete data.readData[oldPath];
-				data.readData[newPath] = {...record, filePath: newPath};
-			}
-			for (const daily of Object.values(data.dailyData)) {
-				for (const session of daily.sessions) if (session.filePath === oldPath) {
-					session.filePath = newPath;
-					session.updatedAt = changedAt;
-					this.appendEvent(data, "session", session.id, "upsert", session.fileId, session);
+		try {
+			await this.mutate(data => {
+				const allRecords = [...Object.entries(data.readData).map(([path, record]) => ({filePath: path, fileId: record.fileId})), ...data.progressEntries];
+				for (const day of Object.values(data.dailyData)) allRecords.push(...day.sessions, ...Object.values(day.dailyReadData));
+				const byPath = new Map<string, Set<string>>();
+				for (const {filePath, fileId} of allRecords) {
+					if (!filePath) continue;
+					const ids = byPath.get(filePath) ?? new Set<string>();
+					ids.add(fileId);
+					byPath.set(filePath, ids);
 				}
-				for (const dailyRecord of Object.values(daily.dailyReadData)) {
-					if (dailyRecord.filePath === oldPath) dailyRecord.filePath = newPath;
+				const matched = new Map<string, string>();
+				const byId = new Map<string, string>();
+				for (const [path, ids] of byPath) {
+					if (path !== oldPath && !(folder && path.startsWith(`${oldPath}/`))) continue;
+					const target = newPath + path.slice(oldPath.length);
+					if (byPath.has(target)) throw new DataSafetyError("ambiguous");
+					matched.set(path, target);
+					for (const id of ids) {
+						if (byId.has(id) && byId.get(id) !== target) throw new DataSafetyError("ambiguous");
+						byId.set(id, target);
+						this.appendEvent(data, "note", id, "rename", id, {oldPath: path, newPath: target});
+					}
 				}
-			}
-			for (const entry of data.progressEntries) if (entry.filePath === oldPath) {
-				entry.filePath = newPath;
-				entry.updatedAt = changedAt;
-				this.appendEvent(data, "progress", entry.id, "upsert", entry.fileId, entry);
-			}
-			this.appendEvent(data, "note", record?.fileId ?? oldPath, "rename", record?.fileId, {oldPath, newPath});
-		});
+				for (const [path, target] of matched) {
+					const record = data.readData[path];
+					if (!record) continue;
+					delete data.readData[path];
+					data.readData[target] = {...record, filePath: target};
+				}
+				for (const daily of Object.values(data.dailyData)) {
+					for (const record of Object.values(daily.dailyReadData)) {
+						const path = matched.get(record.filePath) ?? (!record.filePath ? byId.get(record.fileId) : undefined);
+						if (path) record.filePath = path;
+					}
+					for (const session of daily.sessions) session.filePath = matched.get(session.filePath) ?? session.filePath;
+				}
+				for (const entry of data.progressEntries) entry.filePath = matched.get(entry.filePath) ?? entry.filePath;
+			}, beforeWrite, true);
+			this.protectedPaths.delete(newPath);
+		} catch (error) {
+			this.protectedPaths.add(newPath);
+			throw error;
+		}
 	}
 
-	public async repairSessionData(): Promise<{removed: number}> {
+	public async repairSessionData(beforeWrite?: BeforeWrite): Promise<{removed: number}> {
 		return this.mutate(data => {
+			const beforeSessions = Object.values(data.dailyData).flatMap(day => day.sessions);
+			const afterSessions = repairSessions(beforeSessions);
+			if (afterSessions.length === beforeSessions.length) return {removed: 0};
+			const counts = new Map<string, number>();
+			for (const session of beforeSessions) counts.set(session.id, (counts.get(session.id) ?? 0) + 1);
+			const keep = new Map(afterSessions.map(session => [session.id, session]));
+			const affected = beforeSessions.filter(session => counts.get(session.id) !== 1 || !keep.has(session.id));
+			const latest = latestEventsByEntity(data.eventLog);
+			for (const session of affected) {
+				const winner = keep.get(session.id);
+				if (!winner || winner.fileId !== session.fileId || winner.filePath !== session.filePath
+					|| (winner.updatedAt === session.updatedAt && canonicalData(winner) !== canonicalData(session))
+					|| latest.get(`session:${session.id}`)?.operation === "delete") throw new DataSafetyError("ambiguous");
+				this.assertSessionAttribution(data, session, true);
+			}
 			type SessionTotal = {duration: number; count: number; fileId: string; filePath: string};
 			const summarize = (sessions: StudySession[]) => {
 				const total = new Map<string, SessionTotal>();
@@ -548,39 +701,37 @@ export class PluginDataManager {
 				}
 				return {total, daily};
 			};
-			const beforeSessions = Object.values(data.dailyData).flatMap(day => day.sessions);
-			const afterSessions = repairSessions(beforeSessions);
-			const before = summarize(beforeSessions);
-			const after = summarize(afterSessions);
+			const before = summarize(affected);
+			const after = summarize(afterSessions.filter(session => (counts.get(session.id) ?? 0) > 1));
 
+			const totalsById = new Set<string>();
 			for (const record of Object.values(data.readData)) {
 				const oldSessions = before.total.get(record.fileId);
+				if (!oldSessions) continue;
+				if (totalsById.has(record.fileId)) throw new DataSafetyError("ambiguous");
+				totalsById.add(record.fileId);
 				const keptSessions = after.total.get(record.fileId);
-				record.duration = Math.max(0, record.duration - (oldSessions?.duration ?? 0)) + (keptSessions?.duration ?? 0);
-				record.openCount = Math.max(0, record.openCount - (oldSessions?.count ?? 0)) + (keptSessions?.count ?? 0);
+				if (record.duration < oldSessions.duration || record.openCount < oldSessions.count) throw new DataSafetyError("ambiguous");
+				record.duration = record.duration - oldSessions.duration + (keptSessions?.duration ?? 0);
+				record.openCount = record.openCount - oldSessions.count + (keptSessions?.count ?? 0);
 			}
 
-			for (const daily of Object.values(data.dailyData)) daily.sessions = [];
-			for (const session of afterSessions) {
-				const date = localDateKey(session.openedAt);
-				const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
-				daily.sessions.push({...session});
-				data.dailyData[date] = daily;
-			}
-			for (const date of new Set([...Object.keys(data.dailyData), ...before.daily.keys(), ...after.daily.keys()])) {
-				const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
-				const oldSessions = before.daily.get(date) ?? new Map<string, SessionTotal>();
+			for (const [date, oldSessions] of before.daily) {
+				const daily = data.dailyData[date];
 				const keptSessions = after.daily.get(date) ?? new Map<string, SessionTotal>();
-				for (const [fileId, record] of Object.entries(daily.dailyReadData)) {
-					record.duration = Math.max(0, record.duration - (oldSessions.get(fileId)?.duration ?? 0)) + (keptSessions.get(fileId)?.duration ?? 0);
+				for (const [fileId, previous] of oldSessions) {
+					const record = daily?.dailyReadData[fileId];
+					if (!record || record.duration < previous.duration) throw new DataSafetyError("ambiguous");
+					record.duration = record.duration - previous.duration + (keptSessions.get(fileId)?.duration ?? 0);
 				}
-				for (const [fileId, aggregate] of keptSessions) {
-					if (!daily.dailyReadData[fileId]) daily.dailyReadData[fileId] = {fileId, filePath: aggregate.filePath, duration: aggregate.duration, openCount: 0};
-				}
-				data.dailyData[date] = daily;
+			}
+			for (const daily of Object.values(data.dailyData)) daily.sessions = daily.sessions.filter(session => counts.get(session.id) === 1);
+			for (const session of afterSessions.filter(item => (counts.get(item.id) ?? 0) > 1)) {
+				this.addSessionToDay(data, session);
+				this.appendEvent(data, "session", session.id, "upsert", session.fileId, session);
 			}
 			return {removed: beforeSessions.length - afterSessions.length};
-		});
+		}, beforeWrite, true);
 	}
 
 	public getSessions(): StudySession[] {
@@ -596,7 +747,12 @@ export class PluginDataManager {
 	}
 
 	public async recordCompletedSession(session: StudySession): Promise<void> {
+		if (!isIdentity(session.id) || !isIdentity(session.fileId) || !isIdentity(session.filePath)
+			|| !isSafeStudyInterval(session.openedAt, session.duration) || !isSafeStudyTimestamp(session.closedAt) || session.closedAt < session.openedAt) {
+			throw new DataSafetyError("invalid-snapshot");
+		}
 		await this.mutate(data => {
+			this.checkWritablePath(session.filePath);
 			const date = localDateKey(session.openedAt);
 			const daily = data.dailyData[date] ?? {dailyReadData: {}, sessions: []};
 			if (!daily.sessions.some(candidate => candidate.id === session.id)) daily.sessions.push({...session});
@@ -605,7 +761,8 @@ export class PluginDataManager {
 		});
 	}
 
-	public async createManualSession(input: ManualSessionInput): Promise<StudySession> {
+	public async createManualSession(input: ManualSessionInput, beforeWrite?: BeforeWrite): Promise<StudySession> {
+		this.validateManualSession(input);
 		const now = Date.now();
 		const session: StudySession = {
 			id: createSessionId(input.openedAt),
@@ -619,17 +776,21 @@ export class PluginDataManager {
 			updatedAt: now
 		};
 		await this.mutate(data => {
+			this.checkWritablePath(session.filePath);
 			this.applySessionDelta(data, session, 1);
 			this.addSessionToDay(data, session);
 			this.appendEvent(data, "session", session.id, "upsert", session.fileId, session);
-		});
+		}, beforeWrite);
 		return session;
 	}
 
-	public async updateSession(id: string, input: ManualSessionInput): Promise<StudySession | undefined> {
+	public async updateSession(id: string, input: ManualSessionInput, beforeWrite?: BeforeWrite): Promise<StudySession | undefined> {
+		this.validateManualSession(input);
 		return this.mutate(data => {
 			const existing = this.findSession(data, id);
 			if (!existing) return undefined;
+			this.checkWritablePath(input.filePath);
+			this.assertSessionAttribution(data, existing);
 			const updated: StudySession = {
 				...existing,
 				fileId: input.fileId,
@@ -646,18 +807,19 @@ export class PluginDataManager {
 			this.addSessionToDay(data, updated);
 			this.appendEvent(data, "session", updated.id, "upsert", updated.fileId, updated);
 			return {...updated};
-		});
+		}, beforeWrite, true);
 	}
 
-	public async deleteSession(id: string): Promise<boolean> {
+	public async deleteSession(id: string, beforeWrite?: BeforeWrite): Promise<boolean> {
 		return this.mutate(data => {
 			const existing = this.findSession(data, id);
 			if (!existing) return false;
+			this.assertSessionAttribution(data, existing);
 			this.removeSessionFromDay(data, id);
 			this.applySessionDelta(data, existing, -1);
 			this.appendEvent(data, "session", existing.id, "delete", existing.fileId);
 			return true;
-		});
+		}, beforeWrite, true);
 	}
 
 	public async setSessionEngagement(id: string, engagement: StudySession["engagement"]): Promise<boolean> {
@@ -679,18 +841,51 @@ export class PluginDataManager {
 		return this.data.eventLog.map(event => structuredClone(event));
 	}
 
-	public async mergeData(value: unknown): Promise<{eventsAdded: number; sessionsAdded: number; progressAdded: number}> {
+	private validateManualSession(input: ManualSessionInput): void {
+		if (!isIdentity(input.filePath) || !isIdentity(input.fileId) || !isSafeStudyInterval(input.openedAt, input.duration) || input.duration === 0) {
+			throw new DataSafetyError("invalid-snapshot");
+		}
+	}
+
+	private canPlaceSession(session: StudySession): boolean {
+		if (!isSafeStudyInterval(session.openedAt, session.duration) || !isSafeStudyTimestamp(session.closedAt)
+			|| session.closedAt < session.openedAt || session.duration > session.closedAt - session.openedAt) return false;
+		return session.duration === 0 || session.closedAt === session.openedAt + session.duration
+			|| (session.source === "automatic" && localDateKey(session.openedAt) === localDateKey(Math.max(session.openedAt, session.closedAt - 1)));
+	}
+
+	private assertSessionAttribution(data: PluginData, session: StudySession, allowDuplicate = false): void {
+		this.checkWritablePath(session.filePath);
+		const day = localDateKey(session.openedAt);
+		const placements = Object.entries(data.dailyData).flatMap(([date, bucket]) => bucket.sessions.filter(item => item.id === session.id).map(() => date));
+		const total = data.readData[session.filePath];
+		if (!this.canPlaceSession(session) || placements.some(date => date !== day) || (!allowDuplicate && placements.length !== 1)
+			|| !total || total.fileId !== session.fileId || total.duration < session.duration || total.openCount < 1) {
+			throw new DataSafetyError("ambiguous");
+		}
+		for (const slice of splitDurationByLocalDay(session.openedAt, session.duration)) {
+			const record = data.dailyData[slice.key]?.dailyReadData[session.fileId];
+			if (!record || record.duration < slice.duration || (record.filePath && record.filePath !== session.filePath)) throw new DataSafetyError("ambiguous");
+		}
+	}
+
+	public async mergeData(value: unknown, beforeWrite?: BeforeWrite): Promise<{eventsAdded: number; sessionsAdded: number; progressAdded: number}> {
 		const wrapper = asObject(value);
-		const unwrapped = wrapper && asObject(wrapper.pluginData) ? wrapper.pluginData : value;
+		if (wrapper && "pluginData" in wrapper && (wrapper.format !== "study-time-statistics-backup" || wrapper.version !== 1)) {
+			throw new DataSafetyError("invalid-snapshot");
+		}
+		const unwrapped = wrapper && "pluginData" in wrapper ? wrapper.pluginData : value;
 		await this.validateImport(unwrapped);
 		const incoming = parsePluginData(unwrapped);
 		return this.mutate(data => {
+			const history = ({readData, dailyData, progressEntries, eventLog}: PluginData) => ({readData, dailyData, progressEntries, eventLog});
+			if (canonicalData(history(incoming)) === canonicalData(history(data))) return {eventsAdded: 0, sessionsAdded: 0, progressAdded: 0};
 			type Aggregate = {duration: number; count: number; fileId: string; filePath: string; first?: number; last?: number};
 			const uniqueSessions = (snapshot: PluginData): StudySession[] => {
 				const result = new Map<string, StudySession>();
-				for (const session of Object.values(snapshot.dailyData).flatMap(day => day.sessions)) {
-					const existing = result.get(session.id);
-					if (!existing || session.updatedAt > existing.updatedAt) result.set(session.id, {...session});
+				for (const [date, day] of Object.entries(snapshot.dailyData)) for (const session of day.sessions) {
+					if (result.has(session.id) || date !== localDateKey(session.openedAt) || !this.canPlaceSession(session)) throw new DataSafetyError("ambiguous");
+					result.set(session.id, {...session});
 				}
 				return [...result.values()];
 			};
@@ -720,7 +915,9 @@ export class PluginDataManager {
 				const sessionTotals = totalsFor(uniqueSessions(snapshot));
 				const total = new Map<string, Aggregate>();
 				for (const [path, record] of Object.entries(snapshot.readData)) {
+					if (total.has(record.fileId) || (record.filePath && record.filePath !== path)) throw new DataSafetyError("ambiguous");
 					const tracked = sessionTotals.total.get(record.fileId);
+					if (record.duration < (tracked?.duration ?? 0) || record.openCount < (tracked?.count ?? 0)) throw new DataSafetyError("ambiguous");
 					const residual: Aggregate = {
 						fileId: record.fileId,
 						filePath: record.filePath || path,
@@ -729,14 +926,15 @@ export class PluginDataManager {
 						...(record.firstOpenedAt !== undefined ? {first: record.firstOpenedAt} : {}),
 						...(record.lastOpenedAt !== undefined ? {last: record.lastOpenedAt} : {})
 					};
-					const existing = total.get(record.fileId);
-					if (!existing || residual.duration > existing.duration || residual.count > existing.count) total.set(record.fileId, residual);
+					total.set(record.fileId, residual);
 				}
+				for (const id of sessionTotals.total.keys()) if (!total.has(id)) throw new DataSafetyError("ambiguous");
 				const daily = new Map<string, Map<string, Aggregate>>();
 				for (const [date, day] of Object.entries(snapshot.dailyData)) {
 					const values = new Map<string, Aggregate>();
 					for (const [fileId, record] of Object.entries(day.dailyReadData)) {
 						const tracked = sessionTotals.daily.get(date)?.get(fileId);
+						if (record.fileId !== fileId || record.duration < (tracked?.duration ?? 0)) throw new DataSafetyError("ambiguous");
 						values.set(fileId, {
 							fileId,
 							filePath: record.filePath || snapshot.readData[record.filePath]?.filePath || "",
@@ -746,24 +944,29 @@ export class PluginDataManager {
 					}
 					daily.set(date, values);
 				}
+				for (const [date, points] of sessionTotals.daily) {
+					for (const id of points.keys()) if (!daily.get(date)?.has(id)) throw new DataSafetyError("ambiguous");
+				}
 				return {total, daily};
 			};
-			const mergeAggregateMaps = (current: Map<string, Aggregate>, other: Map<string, Aggregate>, preferCurrent: boolean | undefined): Map<string, Aggregate> => {
+			const mergeAggregateMaps = (current: Map<string, Aggregate>, other: Map<string, Aggregate>): Map<string, Aggregate> => {
 				const result = new Map<string, Aggregate>();
 				for (const key of new Set([...current.keys(), ...other.keys()])) {
 					const left = current.get(key);
 					const right = other.get(key);
 					if (!left && right) result.set(key, {...right});
 					else if (left && !right) result.set(key, {...left});
-					else if (left && right && preferCurrent !== undefined) result.set(key, {...(preferCurrent ? left : right)});
-					else if (left && right) result.set(key, {
+					else if (left && right) {
+						if ((left.duration > 0 || left.count > 0) && (right.duration > 0 || right.count > 0)) throw new DataSafetyError("ambiguous");
+						result.set(key, {
 						fileId: key,
 						filePath: (right.last ?? 0) > (left.last ?? 0) ? right.filePath : left.filePath,
 						duration: Math.max(left.duration, right.duration),
 						count: Math.max(left.count, right.count),
 						...([left.first, right.first].filter((item): item is number => item !== undefined).length ? {first: Math.min(...[left.first, right.first].filter((item): item is number => item !== undefined))} : {}),
 						...(Math.max(left.last ?? 0, right.last ?? 0) > 0 ? {last: Math.max(left.last ?? 0, right.last ?? 0)} : {})
-					});
+						});
+					}
 				}
 				return result;
 			};
@@ -775,12 +978,44 @@ export class PluginDataManager {
 			const originalProgress = data.progressEntries.length;
 			const currentResiduals = residualsFor(data);
 			const incomingResiduals = residualsFor(incoming);
-			const sameDevice = Boolean(data.deviceId && data.deviceId === incoming.deviceId);
-			const preferCurrent = sameDevice ? data.updatedAt >= incoming.updatedAt : undefined;
+			const checkUnattributedTime = (
+				residuals: ReturnType<typeof residualsFor>, owner: PluginData, peer: PluginData, ownerSessions: StudySession[], peerSessions: StudySession[]
+			): void => {
+				const hasResidual = new Set<string>();
+				for (const item of residuals.total.values()) if (item.duration > 0 || item.count > 0) hasResidual.add(item.fileId);
+				for (const day of residuals.daily.values()) {
+					for (const item of day.values()) if (item.duration > 0 || item.count > 0) hasResidual.add(item.fileId);
+				}
+				const byId = new Map(ownerSessions.map(session => [session.id, session]));
+				for (const session of peerSessions) {
+					if (!hasResidual.has(session.fileId)) continue;
+					const known = byId.get(session.id);
+					if (!known || known.fileId !== session.fileId || known.duration !== session.duration || known.openedAt !== session.openedAt) {
+						throw new DataSafetyError("ambiguous");
+					}
+				}
+				if (hasResidual.size) {
+					const ownerEvents = new Set(owner.eventLog.map(event => event.id));
+					for (const event of peer.eventLog) {
+						if (event.entity === "session" && event.operation === "delete" && !ownerEvents.has(event.id)
+							&& (!event.fileId || hasResidual.has(event.fileId))) throw new DataSafetyError("ambiguous");
+					}
+				}
+			};
+			checkUnattributedTime(currentResiduals, data, incoming, currentSessions, incomingSessions);
+			checkUnattributedTime(incomingResiduals, incoming, data, incomingSessions, currentSessions);
+			const currentEventsById = new Map(data.eventLog.map(event => [event.id, event]));
+			for (const event of incoming.eventLog) {
+				const existing = currentEventsById.get(event.id);
+				if (existing && canonicalData(existing) !== canonicalData(event)
+					&& !(event.deviceId === "legacy" && existing.deviceId === "legacy" && event.timestamp !== existing.timestamp)) throw new DataSafetyError("ambiguous");
+			}
 			data.eventLog = mergeStudyEvents(data.eventLog, incoming.eventLog);
 			const sessions = new Map<string, StudySession>();
 			for (const session of [...currentSessions, ...incomingSessions]) {
 				const existing = sessions.get(session.id);
+				if (existing && (existing.fileId !== session.fileId || (existing.updatedAt === session.updatedAt
+					&& canonicalData({...existing, filePath: ""}) !== canonicalData({...session, filePath: ""})))) throw new DataSafetyError("ambiguous");
 				if (!existing || session.updatedAt > existing.updatedAt) sessions.set(session.id, {...session});
 			}
 			const latestEvents = latestEventsByEntity(data.eventLog);
@@ -789,12 +1024,18 @@ export class PluginDataManager {
 				if (event.operation === "delete") sessions.delete(event.entityId);
 				else {
 					const parsed = parseStudySession(event.payload);
-					if (parsed) sessions.set(parsed.id, parsed);
+					const existing = sessions.get(event.entityId);
+					if (!parsed || !existing || parsed.fileId !== existing.fileId) throw new DataSafetyError("ambiguous");
+					if (parsed.updatedAt >= existing.updatedAt) sessions.set(parsed.id, parsed);
 				}
 			}
+			for (const session of sessions.values()) if (!this.canPlaceSession(session)) throw new DataSafetyError("ambiguous");
 			const progress = new Map(data.progressEntries.map(entry => [entry.id, entry]));
+			if (progress.size !== data.progressEntries.length || new Set(incoming.progressEntries.map(entry => entry.id)).size !== incoming.progressEntries.length) throw new DataSafetyError("ambiguous");
 			for (const entry of incoming.progressEntries) {
 				const existing = progress.get(entry.id);
+				if (existing && (existing.fileId !== entry.fileId || (existing.updatedAt === entry.updatedAt
+					&& canonicalData({...existing, filePath: ""}) !== canonicalData({...entry, filePath: ""})))) throw new DataSafetyError("ambiguous");
 				if (!existing || entry.updatedAt > existing.updatedAt) progress.set(entry.id, {...entry});
 			}
 			for (const [key, event] of latestEvents) {
@@ -802,7 +1043,9 @@ export class PluginDataManager {
 				if (event.operation === "delete") progress.delete(event.entityId);
 				else {
 					const parsed = parseProgressEntry(event.payload);
-					if (parsed) progress.set(parsed.id, parsed);
+					const existing = progress.get(event.entityId);
+					if (!parsed || !existing || parsed.fileId !== existing.fileId) throw new DataSafetyError("ambiguous");
+					if (parsed.updatedAt >= existing.updatedAt) progress.set(parsed.id, parsed);
 				}
 			}
 
@@ -810,28 +1053,60 @@ export class PluginDataManager {
 			const considerPath = (fileId: string, path: string, changedAt: number) => {
 				if (!path) return;
 				const existing = preferredPaths.get(fileId);
-				if (!existing || changedAt >= existing.changedAt) preferredPaths.set(fileId, {path, changedAt});
+				if (!existing || changedAt > existing.changedAt || (changedAt === existing.changedAt && path < existing.path)) preferredPaths.set(fileId, {path, changedAt});
 			};
+			const aliases = new Map<string, Set<string>>();
+			const pathsById = new Map<string, Set<string>>();
+			const rememberPath = (id: string, path: string) => {
+				if (!path) return;
+				const ids = aliases.get(path) ?? new Set<string>();
+				ids.add(id);
+				aliases.set(path, ids);
+				const paths = pathsById.get(id) ?? new Set<string>();
+				paths.add(path);
+				pathsById.set(id, paths);
+			};
+			for (const item of [...currentResiduals.total.values(), ...incomingResiduals.total.values(), ...currentSessions, ...incomingSessions, ...data.progressEntries, ...incoming.progressEntries]) rememberPath(item.fileId, item.filePath);
+			const renamed = new Map<string, {path: string; changedAt: number}>();
+			const renameChain = new Map<string, Set<string>>();
 			for (const item of [...currentResiduals.total.values(), ...incomingResiduals.total.values()]) considerPath(item.fileId, item.filePath, item.last ?? 0);
 			for (const session of sessions.values()) considerPath(session.fileId, session.filePath, session.updatedAt);
 			for (const entry of progress.values()) considerPath(entry.fileId, entry.filePath, entry.updatedAt);
 			for (const event of data.eventLog) {
 				if (event.entity !== "note" || event.operation !== "rename") continue;
 				const payload = asObject(event.payload);
-				if (event.fileId && typeof payload?.newPath === "string") considerPath(event.fileId, payload.newPath, event.timestamp);
+				if (typeof payload?.newPath !== "string" || typeof payload.oldPath !== "string") throw new DataSafetyError("ambiguous");
+				const candidates = new Set([...(aliases.get(payload.oldPath) ?? []), ...(aliases.get(payload.newPath) ?? [])]);
+				const id = event.fileId ?? (candidates.size === 1 ? [...candidates][0] : undefined);
+				if (!id) throw new DataSafetyError("ambiguous");
+				const previous = renamed.get(id);
+				if (previous && previous.path !== payload.oldPath && previous.path !== payload.newPath) throw new DataSafetyError("ambiguous");
+				renamed.set(id, {path: payload.newPath, changedAt: event.timestamp});
+				const knownPaths = renameChain.get(id) ?? new Set<string>();
+				knownPaths.add(payload.oldPath);
+				knownPaths.add(payload.newPath);
+				renameChain.set(id, knownPaths);
+				rememberPath(id, payload.oldPath);
+				rememberPath(id, payload.newPath);
 			}
+			for (const ids of aliases.values()) if (ids.size > 1) throw new DataSafetyError("ambiguous");
+			for (const [id, paths] of pathsById) {
+				if (paths.size > 1 && [...paths].some(path => !renameChain.get(id)?.has(path))) throw new DataSafetyError("ambiguous");
+			}
+			for (const [id, rename] of renamed) preferredPaths.set(id, rename);
 			for (const session of sessions.values()) session.filePath = preferredPaths.get(session.fileId)?.path ?? session.filePath;
 			for (const entry of progress.values()) entry.filePath = preferredPaths.get(entry.fileId)?.path ?? entry.filePath;
 			data.progressEntries = [...progress.values()];
 
 			const mergedSessionTotals = totalsFor([...sessions.values()]);
-			const residualTotals = mergeAggregateMaps(currentResiduals.total, incomingResiduals.total, preferCurrent);
+			const residualTotals = mergeAggregateMaps(currentResiduals.total, incomingResiduals.total);
 			data.readData = {};
 			for (const fileId of new Set([...residualTotals.keys(), ...mergedSessionTotals.total.keys()])) {
 				const base = residualTotals.get(fileId);
 				const tracked = mergedSessionTotals.total.get(fileId);
 				const path = preferredPaths.get(fileId)?.path ?? tracked?.filePath ?? base?.filePath ?? "";
 				if (!path) continue;
+				if (data.readData[path]) throw new DataSafetyError("ambiguous");
 				const firstValues = [base?.first, tracked?.first].filter((item): item is number => item !== undefined);
 				const last = Math.max(base?.last ?? 0, tracked?.last ?? 0);
 				data.readData[path] = {
@@ -847,7 +1122,7 @@ export class PluginDataManager {
 			data.dailyData = {};
 			const dates = new Set([...currentResiduals.daily.keys(), ...incomingResiduals.daily.keys(), ...mergedSessionTotals.daily.keys()]);
 			for (const date of dates) {
-				const residual = mergeAggregateMaps(currentResiduals.daily.get(date) ?? new Map<string, Aggregate>(), incomingResiduals.daily.get(date) ?? new Map<string, Aggregate>(), preferCurrent);
+				const residual = mergeAggregateMaps(currentResiduals.daily.get(date) ?? new Map<string, Aggregate>(), incomingResiduals.daily.get(date) ?? new Map<string, Aggregate>());
 				const tracked = mergedSessionTotals.daily.get(date) ?? new Map<string, Aggregate>();
 				const day: DailyReadData = {dailyReadData: {}, sessions: []};
 				for (const fileId of new Set([...residual.keys(), ...tracked.keys()])) {
@@ -860,45 +1135,86 @@ export class PluginDataManager {
 			}
 			for (const session of sessions.values()) this.addSessionToDay(data, session);
 			return {eventsAdded: data.eventLog.length - originalEvents, sessionsAdded: Math.max(0, sessions.size - originalSessions), progressAdded: Math.max(0, data.progressEntries.length - originalProgress)};
-		});
+		}, beforeWrite, true);
 	}
 
 	public async validateImport(value: unknown): Promise<void> {
 		const source = asObject(value);
+		if (!source) throw new DataSafetyError("invalid-snapshot");
+		const version = source.dataVersion;
+		if (version !== undefined && (typeof version !== "number" || !Number.isInteger(version) || version < 1 || version > CURRENT_DATA_VERSION)) {
+			throw new DataSafetyError("future-version");
+		}
+		const legacy = version === undefined || version < CURRENT_DATA_VERSION;
 		const readData = asObject(source?.readData);
 		const dailyData = asObject(source?.dailyData);
-		if (!source || !readData || !dailyData) throw new Error("Invalid Study Time Statistics data snapshot");
-		if (Object.entries(readData).some(([path, record]) => parseReadRecord(record, path) === undefined)) {
-			throw new Error("Invalid Study Time Statistics read record");
+		if ((!readData && (!legacy || source.readData !== undefined)) || (!dailyData && (!legacy || source.dailyData !== undefined))
+			|| (!readData && !dailyData) || (source.updatedAt !== undefined && !isSafeStudyTimestamp(source.updatedAt))
+			|| (source.settings !== undefined && !asObject(source.settings))) throw new DataSafetyError("invalid-snapshot");
+		const validReadRecord = (candidate: unknown): boolean => {
+			const record = asObject(candidate);
+			return Boolean(record && isIdentity(record.fileId) && (record.filePath === undefined || typeof record.filePath === "string")
+				&& isNonNegativeNumber(record.duration) && typeof record.openCount === "number" && Number.isSafeInteger(record.openCount) && record.openCount >= 0
+				&& ["firstOpenedAt", "lastOpenedAt"].every(key => record[key] === undefined || isSafeStudyTimestamp(record[key])));
+		};
+		const validSession = (candidate: unknown): boolean => {
+			const item = asObject(candidate);
+			if (!item || !isIdentity(item.fileId) || !isIdentity(item.filePath) || !isSafeStudyTimestamp(item.openedAt)
+				|| !isSafeStudyDuration(item.duration) || !isSafeStudyInterval(item.openedAt, item.duration)
+				|| (item.id !== undefined && !isIdentity(item.id))) return false;
+			if (item.closedAt !== undefined && (!isSafeStudyTimestamp(item.closedAt) || item.closedAt < item.openedAt)) return false;
+			return ["createdAt", "updatedAt", "firstInteractionAt", "lastInteractionAt"].every(key => item[key] === undefined || isSafeStudyTimestamp(item[key]));
+		};
+		const validProgress = (candidate: unknown): boolean => {
+			const item = asObject(candidate);
+			const percent = (input: unknown): input is number => isNonNegativeNumber(input) && input <= 100;
+			return Boolean(item && isIdentity(item.filePath) && isIdentity(item.fileId) && isSafeStudyTimestamp(item.recordedAt) && item.recordedAt !== 0
+				&& percent(item.percent) && (item.id === undefined || isIdentity(item.id))
+				&& ["createdAt", "updatedAt"].every(key => item[key] === undefined || isSafeStudyTimestamp(item[key]))
+				&& ["characterCount", "readCharacters"].every(key => item[key] === undefined || isNonNegativeNumber(item[key]))
+				&& (item.activeDuration === undefined || isSafeStudyDuration(item.activeDuration))
+				&& (item.startPosition === undefined || percent(item.startPosition))
+				&& (item.endPosition === undefined || percent(item.endPosition))
+				&& !(percent(item.startPosition) && percent(item.endPosition) && item.startPosition > item.endPosition));
+		};
+		for (const [path, record] of Object.entries(readData ?? {})) {
+			if (!isIdentity(path) || !validReadRecord(record)) throw new DataSafetyError("invalid-snapshot");
 		}
-		for (const candidate of Object.values(dailyData)) {
+		for (const [date, candidate] of Object.entries(dailyData ?? {})) {
 			const day = asObject(candidate);
 			const dailyRecords = asObject(day?.dailyReadData);
-			if (!day || !dailyRecords || !Array.isArray(day.sessions)) throw new Error("Invalid Study Time Statistics daily record");
-			if (Object.entries(dailyRecords).some(([path, record]) => parseReadRecord(record, path) === undefined)) {
-				throw new Error("Invalid Study Time Statistics daily note record");
+			if (!isDateKey(date) || !day || (!dailyRecords && (!legacy || day.dailyReadData !== undefined))
+				|| (!Array.isArray(day.sessions) && (!legacy || day.sessions !== undefined))) throw new DataSafetyError("invalid-snapshot");
+			for (const [id, record] of Object.entries(dailyRecords ?? {})) {
+				if (!isIdentity(id) || !validReadRecord(record)) throw new DataSafetyError("invalid-snapshot");
 			}
-			if (day.sessions.some(session => parseStudySession(session) === undefined)) throw new Error("Invalid Study Time Statistics session");
+			if (Array.isArray(day.sessions) && day.sessions.some(session => !validSession(session))) throw new DataSafetyError("invalid-snapshot");
 		}
-		if (source.progressEntries !== undefined && (!Array.isArray(source.progressEntries) || source.progressEntries.some(entry => parseProgressEntry(entry) === undefined))) {
-			throw new Error("Invalid Study Time Statistics progress record");
+		if (source.progressEntries !== undefined && (!Array.isArray(source.progressEntries) || source.progressEntries.some(entry => !validProgress(entry)))) {
+			throw new DataSafetyError("invalid-snapshot");
 		}
 		if (source.eventLog !== undefined) {
-			if (!Array.isArray(source.eventLog)) throw new Error("Invalid Study Time Statistics event log");
+			if (!Array.isArray(source.eventLog)) throw new DataSafetyError("invalid-snapshot");
+			const ids = new Map<string, unknown>();
 			for (const candidate of source.eventLog) {
 				const event = parseStudyEvent(candidate);
-				if (!event) throw new Error("Invalid Study Time Statistics event record");
-				if (event.operation === "upsert" && event.entity === "session" && !parseStudySession(event.payload)) throw new Error("Invalid Study Time Statistics session event");
-				if (event.operation === "upsert" && event.entity === "progress" && !parseProgressEntry(event.payload)) throw new Error("Invalid Study Time Statistics progress event");
+				if (!event || !isSafeStudyTimestamp(event.timestamp) || !isIdentity(event.entityId) || (event.fileId !== undefined && !isIdentity(event.fileId))) throw new DataSafetyError("invalid-snapshot");
+				if (ids.has(event.id) && canonicalData(ids.get(event.id)) !== canonicalData(candidate)) throw new DataSafetyError("invalid-snapshot");
+				ids.set(event.id, candidate);
+				const payload = asObject(event.payload);
+				if (event.operation === "upsert" && (event.entity === "note" || payload?.id !== event.entityId
+					|| (event.fileId !== undefined && payload.fileId !== event.fileId)
+					|| (event.entity === "session" ? !validSession(event.payload) : !validProgress(event.payload)))) throw new DataSafetyError("invalid-snapshot");
+				if (event.operation === "delete" && event.entity === "note") throw new DataSafetyError("invalid-snapshot");
 				if (event.operation === "rename") {
-					const payload = asObject(event.payload);
-					if (event.entity !== "note" || typeof payload?.oldPath !== "string" || typeof payload.newPath !== "string" || !payload.newPath) throw new Error("Invalid Study Time Statistics rename event");
+					if (event.entity !== "note" || !isIdentity(payload?.oldPath) || !isIdentity(payload?.newPath)) throw new DataSafetyError("invalid-snapshot");
 				}
 			}
 		}
+		return Promise.resolve();
 	}
 
-	public async importData(value: unknown): Promise<void> {
+	public async importData(value: unknown, beforeWrite?: BeforeWrite): Promise<void> {
 		await this.validateImport(value);
 		const parsed = parsePluginData(value);
 		await this.mutate(data => {
@@ -909,7 +1225,7 @@ export class PluginDataManager {
 			data.deviceId = parsed.deviceId || data.deviceId;
 			data.eventLog = parsed.eventLog;
 			data.settings = parsed.settings;
-		});
+		}, beforeWrite, true);
 	}
 
 	private findSession(data: PluginData, id: string): StudySession | undefined {
@@ -941,6 +1257,7 @@ export class PluginDataManager {
 	}
 
 	private applySessionDelta(data: PluginData, session: StudySession, direction: 1 | -1): void {
+		if (data.readData[session.filePath] && data.readData[session.filePath]?.fileId !== session.fileId) throw new DataSafetyError("ambiguous");
 		const total = data.readData[session.filePath] ?? {
 			fileId: session.fileId,
 			filePath: session.filePath,

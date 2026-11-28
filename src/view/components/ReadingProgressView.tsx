@@ -76,9 +76,8 @@ export function ReadingProgressView({plugin, onSelect}: Props) {
 			I18n.t("deleteProgressConfirm"),
 			I18n.t("delete"),
 			async () => {
-				await plugin.backupService.createSafetyBackup();
-				await plugin.dataManager.deleteProgressEntry(entry.id);
-				new Notice(I18n.t("progressDeleted"));
+				const deleted = await plugin.backupService.withSafetyBackup(backup => plugin.dataManager.deleteProgressEntry(entry.id, backup));
+				new Notice(deleted ? I18n.t("progressDeleted") : I18n.local("This reading record is no longer available.", "这条阅读记录已不存在。"));
 				await load();
 			}
 		).open();

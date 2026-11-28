@@ -1,4 +1,20 @@
-import {StudySession, StudySessionSource} from "../interface/studySession";
+import type {StudySession, StudySessionSource} from "../interface/studySession";
+
+// Keep the work when projecting one contiguous interval into days/hours bounded.
+export const MAX_STUDY_DURATION_MS = 31 * 86_400_000;
+const MAX_STUDY_TIMESTAMP_MS = Date.UTC(9999, 11, 31, 23, 59, 59, 999);
+
+export function isSafeStudyDuration(value: unknown): value is number {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= MAX_STUDY_DURATION_MS;
+}
+
+export function isSafeStudyTimestamp(value: unknown): value is number {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= MAX_STUDY_TIMESTAMP_MS;
+}
+
+export function isSafeStudyInterval(openedAt: number, duration: number): boolean {
+	return isSafeStudyTimestamp(openedAt) && isSafeStudyDuration(duration) && isSafeStudyTimestamp(openedAt + duration);
+}
 
 function hashText(value: string): string {
 	let hash = 2166136261;
@@ -23,15 +39,19 @@ export function isStudySessionSource(value: unknown): value is StudySessionSourc
 
 export function parseDurationInput(value: string): number | undefined {
 	const trimmed = value.trim();
-	if (!trimmed) return undefined;
+	if (!trimmed || trimmed.length > 32) return undefined;
+	const decimal = /^(?:\d+(?:\.\d*)?|\.\d+)$/u;
 	if (!trimmed.includes(":")) {
-		const minutes = Number(trimmed);
-		return Number.isFinite(minutes) && minutes >= 0 ? Math.round(minutes * 60_000) : undefined;
+		if (!decimal.test(trimmed)) return undefined;
+		const duration = Math.round(Number(trimmed) * 60_000);
+		return isSafeStudyDuration(duration) ? duration : undefined;
 	}
-	const parts = trimmed.split(":").map(Number);
-	if ((parts.length !== 2 && parts.length !== 3) || parts.some(part => !Number.isFinite(part) || part < 0)) return undefined;
-	const [first = 0, second = 0, third = 0] = parts;
+	const parts = trimmed.split(":").map(part => part.trim());
+	if (parts.length !== 2 && parts.length !== 3) return undefined;
+	if (!parts.every((part, index) => index === parts.length - 1 ? decimal.test(part) : /^\d+$/u.test(part))) return undefined;
+	const [first = 0, second = 0, third = 0] = parts.map(Number);
 	if (second >= 60 || third >= 60) return undefined;
 	const seconds = parts.length === 2 ? first * 60 + second : first * 3600 + second * 60 + third;
-	return Math.round(seconds * 1000);
+	const duration = Math.round(seconds * 1000);
+	return isSafeStudyDuration(duration) ? duration : undefined;
 }
