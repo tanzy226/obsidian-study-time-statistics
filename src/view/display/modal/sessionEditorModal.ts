@@ -1,8 +1,9 @@
 import {App, Modal, Notice, Setting, TFile, normalizePath} from "obsidian";
 import StudyTimeStatisticsPlugin from "../../../main";
+import {dataSafetyMessage} from "../../../core/dataSafety";
 import {StudySession} from "../../../interface/studySession";
 import I18n from "../../../language/i18n";
-import {parseDurationInput} from "../../../util/sessionUtils";
+import {isSafeStudyInterval, parseDurationInput} from "../../../util/sessionUtils";
 
 function toLocalDateTimeInput(timestamp: number): string {
 	const date = new Date(timestamp);
@@ -19,6 +20,8 @@ function formatDurationInput(duration: number): string {
 }
 
 export class SessionEditorModal extends Modal {
+	private saving = false;
+
 	constructor(
 		app: App,
 		private readonly plugin: StudyTimeStatisticsPlugin,
@@ -32,8 +35,10 @@ export class SessionEditorModal extends Modal {
 		this.setTitle(this.session ? I18n.t("editSession") : I18n.t("addSession"));
 		const activePath = this.app.workspace.getActiveFile()?.path ?? "";
 		let filePath = this.session?.filePath ?? activePath;
-		let openedAtText = toLocalDateTimeInput(this.session?.openedAt ?? Date.now());
-		let durationText = formatDurationInput(this.session?.duration ?? 0);
+		const initialOpenedAtText = toLocalDateTimeInput(this.session?.openedAt ?? Date.now());
+		const initialDurationText = formatDurationInput(this.session?.duration ?? 0);
+		let openedAtText = initialOpenedAtText;
+		let durationText = initialDurationText;
 
 		new Setting(this.contentEl)
 			.setName(I18n.t("sessionNotePath"))
@@ -55,31 +60,49 @@ export class SessionEditorModal extends Modal {
 		new Setting(this.contentEl).addButton(button => button
 			.setCta()
 			.setButtonText(I18n.t("save"))
-			.onClick(() => { void this.save(filePath, openedAtText, durationText); }));
+			.onClick(() => {
+				if (this.saving) return;
+				const openedAt = this.session && openedAtText === initialOpenedAtText ? this.session.openedAt : new Date(openedAtText).getTime();
+				const duration = this.session && durationText === initialDurationText ? this.session.duration : parseDurationInput(durationText);
+				button.setDisabled(true);
+				void this.save(filePath, openedAt, duration).finally(() => { button.setDisabled(false); });
+			}));
 	}
 
-	private async save(filePathValue: string, openedAtText: string, durationText: string): Promise<void> {
+	private async save(filePathValue: string, openedAt: number, duration: number | undefined): Promise<void> {
 		const filePath = normalizePath(filePathValue.trim());
 		const file = this.app.vault.getFileByPath(filePath);
-		const openedAt = new Date(openedAtText).getTime();
-		const duration = parseDurationInput(durationText);
 		if (!(file instanceof TFile) || !["md", "pdf"].includes(file.extension.toLowerCase())) {
 			new Notice(I18n.t("sessionInvalidNote"));
 			return;
 		}
-		if (!Number.isFinite(openedAt) || duration === undefined) {
+		if (duration === undefined || !isSafeStudyInterval(openedAt, duration)) {
 			new Notice(I18n.t("sessionInvalidTime"));
 			return;
 		}
-		await this.plugin.backupService.createSafetyBackup();
 		const input = {
 			fileId: this.plugin.dataManager.getReadRecord(filePath)?.fileId ?? filePath,
 			filePath,
 			openedAt,
 			duration
 		};
-		if (this.session) await this.plugin.dataManager.updateSession(this.session.id, input);
-		else await this.plugin.dataManager.createManualSession(input);
+		this.saving = true;
+		try {
+			const id = this.session?.id;
+			const saved = await this.plugin.backupService.withSafetyBackup(backup => id
+				? this.plugin.dataManager.updateSession(id, input, backup)
+				: this.plugin.dataManager.createManualSession(input, backup));
+			if (!saved) {
+				new Notice(I18n.local("This session is no longer available.", "这条会话已不存在。"));
+				return;
+			}
+		} catch (error) {
+			console.error("Study Time Statistics failed to save a session", error);
+			new Notice(dataSafetyMessage(error, I18n.t("actionFailed")));
+			return;
+		} finally {
+			this.saving = false;
+		}
 		new Notice(I18n.t("sessionSaved"));
 		this.onSaved();
 		this.close();
@@ -87,6 +110,8 @@ export class SessionEditorModal extends Modal {
 }
 
 export class ConfirmActionModal extends Modal {
+	private running = false;
+
 	constructor(
 		app: App,
 		private readonly titleText: string,
@@ -101,19 +126,26 @@ export class ConfirmActionModal extends Modal {
 		this.setTitle(this.titleText);
 		this.contentEl.createEl("p", {text: this.description});
 		new Setting(this.contentEl)
-			.addButton(button => button.setButtonText(I18n.t("cancel")).onClick(() => this.close()))
+			.addButton(button => button.setButtonText(I18n.t("cancel")).onClick(() => {
+				if (!this.running) this.close();
+			}))
 			.addButton(button => button.setDestructive().setButtonText(this.confirmText).onClick(() => {
-				void this.runAction();
+				if (this.running) return;
+				button.setDisabled(true);
+				void this.runAction().finally(() => { button.setDisabled(false); });
 			}));
 	}
 
 	private async runAction(): Promise<void> {
+		this.running = true;
 		try {
 			await this.action();
 			this.close();
 		} catch (error) {
 			console.error("Study Time Statistics action failed", error);
-			new Notice(I18n.t("actionFailed"));
+			new Notice(dataSafetyMessage(error, I18n.t("actionFailed")));
+		} finally {
+			this.running = false;
 		}
 	}
 }

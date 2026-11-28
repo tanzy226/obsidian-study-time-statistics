@@ -1,4 +1,4 @@
-import {Plugin, TFile} from 'obsidian';
+import {Notice, Plugin, TFile, TFolder} from 'obsidian';
 import {StudyTimeStatisticsSettingTab} from "./setting/studyTimeStatisticsSettingTab";
 import {CommandFactory} from "./command/commandFactory";
 import I18n from "./language/i18n";
@@ -11,6 +11,7 @@ import {FocusDataAggregator} from "./core/focusDataAggregator";
 import {NoteStatsBarManager} from "./view/display/noteStatsBar/noteStatsBarManager";
 import {StudyAnalyticsService} from "./core/studyAnalyticsService";
 import {DataBackupService} from "./core/dataBackupService";
+import {dataSafetyMessage} from "./core/dataSafety";
 
 export default class StudyTimeStatisticsPlugin extends Plugin {
 	get dataAnalyzer(): DataAnalyzer {
@@ -52,9 +53,11 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 		this.dailyReadDataManager = new DailyReadDataManager(this._dataManager);
 
 		await this.dataManager.loadData();
-		await this.dataManager.ensureDeviceId();
+		this.dataManager.ensureDeviceId();
 		this.applyVisualizationAppearance();
 		this.init();
+		const protection = this.dataManager.getWriteProtection();
+		if (protection) new Notice(dataSafetyMessage(protection, I18n.t("actionFailed")));
 
 	}
 
@@ -79,17 +82,23 @@ export default class StudyTimeStatisticsPlugin extends Plugin {
 	private init() {
 		this.setLanguage();
 		this.timeTracker = new TimeTracker(this, this.app, this._dataManager, this.dailyReadDataManager);
-		this._dataAnalyzer = new DataAnalyzer(this, this.app, this._dataManager);
+		this._dataAnalyzer = new DataAnalyzer(this.app, this._dataManager);
 		this._focusDataAggregator = new FocusDataAggregator(this.app, this._dataManager, this.dailyReadDataManager);
 		this._studyAnalyticsService = new StudyAnalyticsService(this.app, this._dataManager);
-		this._backupService = new DataBackupService(this.app, this._dataManager);
+		this._backupService = new DataBackupService(this.app, this._dataManager, action => this.timeTracker?.withHistoryReplacement(action) ?? action());
+		this._dataManager.setMigrationBackup(snapshot => this._backupService.createBackupFromData(snapshot));
 		this.noteStatsBarManager = new NoteStatsBarManager(this, this.app, this._dataManager);
 		this.addSettingTab(new StudyTimeStatisticsSettingTab(this.app, this));
 		RibbonFactory.createLeaderboardRibbon(this, this.app);
 		this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
-			if (file instanceof TFile) {
-				this.timeTracker?.handleFileRename(oldPath, file.path);
-				void this._dataManager.renameFilePath(oldPath, file.path);
+			if (file instanceof TFile || file instanceof TFolder) {
+				const newPath = file.path;
+				const folder = file instanceof TFolder;
+				const moveHistory = () => this._backupService.withSafetyBackup(backup => this._dataManager.renameFilePath(oldPath, newPath, folder, backup));
+				void (this.timeTracker?.withFileRename(oldPath, newPath, folder, moveHistory) ?? moveHistory()).catch(error => {
+					console.error("Study Time Statistics could not move the saved statistics", error);
+					new Notice(dataSafetyMessage(error, I18n.t("actionFailed")));
+				});
 			}
 		}));
 

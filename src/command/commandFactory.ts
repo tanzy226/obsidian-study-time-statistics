@@ -2,8 +2,10 @@ import {App, Notice} from 'obsidian';
 import {DashboardModal} from "../view/display/modal/dashboardModal";
 import StudyTimeStatisticsPlugin from "../main";
 import I18n from "../language/i18n";
-import {ConfirmActionModal, SessionEditorModal} from "../view/display/modal/sessionEditorModal";
+import {SessionEditorModal} from "../view/display/modal/sessionEditorModal";
 import {ProgressEntryModal} from "../view/display/modal/progressEntryModal";
+import {openRestoreBackupModal} from "../view/display/modal/restoreBackupModal";
+import {dataSafetyMessage} from "../core/dataSafety";
 export class CommandFactory {
 
 	private plugin: StudyTimeStatisticsPlugin;
@@ -52,7 +54,7 @@ export class CommandFactory {
 					new Notice(I18n.t("backupCreated", {path}));
 				}).catch(error => {
 					console.error("Study Time Statistics backup failed", error);
-					new Notice(I18n.t("actionFailed"));
+					new Notice(dataSafetyMessage(error, I18n.t("actionFailed")));
 				});
 			}
 		});
@@ -60,18 +62,7 @@ export class CommandFactory {
 		this.plugin.addCommand({
 			id: "restore-latest-data-backup",
 			name: I18n.t("restoreLatestBackup"),
-			callback: () => {
-				new ConfirmActionModal(
-					this.app,
-					I18n.t("restoreBackup"),
-					I18n.t("restoreBackupConfirm"),
-					I18n.t("restore"),
-					async () => {
-						const path = await this.plugin.backupService.restoreLatestBackup();
-						new Notice(path ? I18n.t("backupRestored", {path}) : I18n.t("noBackupAvailable"));
-					}
-				).open();
-			}
+			callback: () => { void openRestoreBackupModal(this.plugin); }
 		});
 
 	}

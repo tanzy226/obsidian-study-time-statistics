@@ -5,6 +5,8 @@ import {StudySession} from "../../interface/studySession";
 import {TimeUtils} from "../../util/timeUtils";
 import I18n from "../../language/i18n";
 import {ConfirmActionModal, SessionEditorModal} from "../display/modal/sessionEditorModal";
+import {openRestoreBackupModal} from "../display/modal/restoreBackupModal";
+import {dataSafetyMessage} from "../../core/dataSafety";
 
 interface Props {
 	plugin: StudyTimeStatisticsPlugin;
@@ -55,8 +57,8 @@ export function SessionHistoryView({plugin, onSelect}: Props) {
 			I18n.t("deleteSessionConfirm"),
 			I18n.t("delete"),
 			async () => {
-				await plugin.backupService.createSafetyBackup();
-				await plugin.dataManager.deleteSession(session.id);
+				const removed = await plugin.backupService.withSafetyBackup(backup => plugin.dataManager.deleteSession(session.id, backup));
+				if (!removed) return;
 				new Notice(I18n.t("sessionDeleted"));
 				await load();
 			}
@@ -70,22 +72,12 @@ export function SessionHistoryView({plugin, onSelect}: Props) {
 			await load();
 		} catch (error) {
 			console.error("Study Time Statistics backup failed", error);
-			new Notice(I18n.t("actionFailed"));
+			new Notice(dataSafetyMessage(error, I18n.t("actionFailed")));
 		}
 	};
 
 	const restoreLatest = () => {
-		new ConfirmActionModal(
-			plugin.app,
-			I18n.t("restoreBackup"),
-			I18n.t("restoreBackupConfirm"),
-			I18n.t("restore"),
-			async () => {
-				const path = await plugin.backupService.restoreLatestBackup();
-				new Notice(path ? I18n.t("backupRestored", {path}) : I18n.t("noBackupAvailable"));
-				await load();
-			}
-		).open();
+		void openRestoreBackupModal(plugin, load);
 	};
 
 	if (loading) return <div className="stats-loading">{I18n.t("loading")}</div>;

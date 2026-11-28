@@ -2,9 +2,11 @@
 
 **English (this page)** · [完整中文说明](README_zh.md) · [中文摘要](#中文摘要)
 
-Study Time Statistics helps you see where your reading time goes in Obsidian. It tracks time and opens for notes and PDFs, shows a small statistics strip inside each Markdown note, and turns your local history into trends, rankings, and a study-investment map. You can optionally record how much of a note you read. It never writes statistics into your Markdown content.
+See where your reading time goes without leaving Obsidian. Study Time Statistics records time and opens for notes and PDFs, then shows daily trends, heatmaps, and rankings for **your own vault**. A compact strip in Markdown notes shows at-a-glance totals; you can move it, expand it, or turn it off without changing the note.
 
-**This guide covers the 3.0.0 release.** See the [release roadmap](ROADMAP.md) for the release policy.
+The plugin keeps its records local, needs no account, and does not upload study data. You can review sessions, set goals, and optionally log how much you read.
+
+[Install](#installation) · [Open the dashboard](#open-the-dashboard) · [What's new in 3.0.1](.github/release-notes/3.0.1.md) · [Release roadmap](ROADMAP.md)
 
 ![Actual Study Time Statistics analytics overview with private note details excluded](assets/analytics-overview-2026-10-02.png)
 
@@ -18,13 +20,13 @@ Study Time Statistics helps you see where your reading time goes in Obsidian. It
 | Study Overview | See today and this week, goal progress, previous-week comparison, session-quality indicators, high-investment hours, and notes you have not opened recently. |
 | Analytics | Explore trends, heatmaps, five rankings, local filters and period comparisons, plus a folder-by-folder investment map. |
 | Records | Inspect or correct sessions, optionally record reading coverage and position, and set daily or weekly goals. |
-| More | Create local reports, check data health, and open feedback forms. Backup and restore commands are in the Command Palette. |
+| More | Export local reports, check data health, merge compatible snapshots, and open feedback forms. Backup and restore commands are in the Command Palette. |
 
 ### Automatic tracking and per-note statistics
 
-- Track time and opens while reading Markdown notes or PDFs. The status bar also shows the active file's accumulated time. The default Strict mode pauses the timer when Obsidian loses focus. In 2.5.0, you can also choose an idle timeout (20 minutes by default, or 0 to disable it); neither setting proves that you understood the material.
+- Track time and opens while reading Markdown notes or PDFs. The status bar also shows the active file's accumulated time. Strict mode is on by default and pauses the timer when Obsidian loses focus. The idle timeout is configurable (20 minutes by default; 0 disables it).
 - The Markdown note strip is part of the editor/preview UI, not the document. Its compact line shows opens and total time; full mode shows seven core metrics and optional coverage details. Choose top, bottom, or hidden in plugin settings. It scrolls with the content.
-- Open count and reading sessions are kept separately. You can inspect session start, duration, and note later, and add, edit, or delete a session if the automatic record was inaccurate.
+- Opening a note and recording a timed session are different metrics. Review the start time, duration, and note for a session, or make a correction when it can be applied without changing unrelated totals.
 
 ### Analytics, comparisons, and navigation
 
@@ -43,14 +45,14 @@ Study Time Statistics helps you see where your reading time goes in Obsidian. It
 - Data stays in your vault. There is no plugin account, telemetry, advertising, or automatic network upload. The dashboard's Feedback page opens GitHub forms only when you choose to use them.
 - From **More → Reports**, select a date range and preview a locally generated summary. Download JSON, CSV, or Markdown, or copy the Markdown report. Note names are hidden by default; turn that option off only when you intend to include real paths in an export. Exports are saved by your browser/operating system and may contain private study times even when names are hidden.
 - The dashboard and its filters, maps, and tables adapt to narrower screens. Touch and page-visibility events also help the timer respond on mobile and in multi-window use.
-- Use the Command Palette to create a timestamped local backup or restore the latest usable backup. Under More, Data Health checks duplicate or invalid sessions and references to missing notes. Safe repairs make a backup first; missing-note history is retained instead of erased. Renaming a note moves its associated records to the new path. The 20 newest backups are retained automatically.
-- Version 3.0 adds a local event history and a **Merge data snapshot** command for resolving synchronized-device conflicts. It validates the imported snapshot and creates a backup before changing data; deleted records remain deleted after a merge. This is a data merge, not a cloud service.
+- Use the Command Palette to create a timestamped local backup or restore a backup. **More → Data management** checks for duplicate or invalid sessions and references to missing notes. Missing-note history is kept. Backup retention applies to recognized plugin backups, not other files stored nearby.
+- **Merge snapshot** under **More → Data management** combines compatible histories locally and requires a backup before writing changes. In 3.0.1, merge and session corrections stop if the plugin cannot reconcile the records safely. For example, older sessions may only store a total, not when each active interval occurred; 3.0.1 does not guess which day to change. Keep both snapshots if a merge is stopped.
 
 ## Reading the numbers correctly
 
 - **Open** means the plugin observed a note becoming active. **Average time per visit** is that note's tracked time divided by its open count; it is not the average of completed-session lengths.
 - **Tracked time** reflects time recorded while the note is active, subject to the focus setting and timing limits. Quiet study and leaving a window open can look similar; review or correct doubtful sessions rather than treating the timer as a measure of attention.
-- **Reading coverage** is the sum of your self-reported visit percentages, capped at 100% per note. It is not a test of comprehension, memory, or mastery. Unique-character reach and reading pace are estimates based on those entries and character counts, not direct measures of information absorbed.
+- **Reading coverage** is the sum of your self-reported visit percentages, capped at 100% per note. Reading the same passage twice can increase this total; it does not establish how much distinct material you covered. Character and pace figures are estimates, not tests of comprehension or recall.
 - **Revisit suggestions** mean only that a note has not been opened recently. They do not predict forgetting.
 
 ## Real, anonymized snapshot
@@ -75,9 +77,9 @@ Study Time Statistics is available in the Obsidian Community Plugins directory. 
 
 ### Manual installation
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the latest GitHub release.
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest GitHub release](https://github.com/tanzy226/obsidian-study-time-statistics/releases/latest).
 2. Create `<vault>/.obsidian/plugins/study-time-statistics/`.
-3. Copy the three files into that directory.
+3. Copy the three files into that directory. When updating, replace only these files; keep your existing `data.json`.
 4. Restart Obsidian, then enable **Study Time Statistics** under **Settings → Community plugins**.
 
 ## Privacy and storage
@@ -124,9 +126,9 @@ The codebase is derived from [AstraDev's open-source Obsidian time tracker](http
 
 ## 中文摘要
 
-Study Time Statistics（学习时间统计）是一款本地隐私优先的 Obsidian 插件，统计笔记与 PDF 的阅读时间和打开次数，在 Markdown 笔记顶部展示随正文滚动的统计条，并提供学习总览、趋势与热力图、五类本地排行榜、筛选对比和按文件夹浏览的投入地图。它不会改写笔记原文。
+Study Time Statistics（学习时间统计）记录 Obsidian 笔记和 PDF 的阅读时长与打开次数。你可以在笔记里查看即时统计，也可以在仪表盘里看趋势、热力图和库内排行，按日期或文件夹查找阅读记录。统计条可放在顶部、底部或隐藏，不改写笔记原文。
 
-本页按 3.0.0 版介绍。可选的阅读覆盖度、位置与字符统计只描述阅读行为，不代表吸收、理解或记忆。完整功能、数据口径和使用方法见 [中文说明](README_zh.md)。
+3.0.1 重点保护已有记录：如果无法安全合并快照或修正会话，插件会停止操作，而不是改动无法核对的历史。见 [3.0.1 更新说明](.github/release-notes/3.0.1.md)及[完整中文说明](README_zh.md)。
 
 上方图片是 2026-10-02 从实际 Obsidian 界面直接裁切的截图，显示当时 **87 篇已读笔记、200 次打开、累计 3 小时 45 分钟**。截图来自当时尚未公开发布的 3.0.0 开发版；截取时公开最新版为 2.2.0，部分控件可能不同。公开图片仅展示汇总数据，没有笔记标题、路径、文件夹或正文。
 

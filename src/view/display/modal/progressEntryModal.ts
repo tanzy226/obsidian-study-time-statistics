@@ -1,9 +1,11 @@
 import {App, Modal, Notice, Setting, TFile, normalizePath} from "obsidian";
+import {dataSafetyMessage} from "../../../core/dataSafety";
+import {DataSafetyError} from "../../../core/dataSafetyError";
 import StudyTimeStatisticsPlugin from "../../../main";
 import {ReadingProgressEntry} from "../../../interface/readingProgress";
 import I18n from "../../../language/i18n";
 import {countReadableCharacters} from "../../../util/readingProgressUtils";
-import {parseDurationInput} from "../../../util/sessionUtils";
+import {isSafeStudyDuration, isSafeStudyTimestamp, parseDurationInput} from "../../../util/sessionUtils";
 
 function toLocalDateTimeInput(timestamp: number): string {
 	const date = new Date(timestamp);
@@ -20,6 +22,8 @@ function durationInput(duration: number): string {
 }
 
 export class ProgressEntryModal extends Modal {
+	private saving = false;
+
 	constructor(
 		app: App,
 		private readonly plugin: StudyTimeStatisticsPlugin,
@@ -34,13 +38,16 @@ export class ProgressEntryModal extends Modal {
 		this.setTitle(this.entry ? I18n.t("editProgressEntry") : I18n.t("recordProgress"));
 		const activePath = this.app.workspace.getActiveFile()?.path ?? "";
 		let filePath = this.entry?.filePath ?? this.filePathOverride ?? activePath;
-		let recordedAtText = toLocalDateTimeInput(this.entry?.recordedAt ?? Date.now());
+		const initialRecordedAt = this.entry?.recordedAt ?? Date.now();
+		const initialRecordedAtText = toLocalDateTimeInput(initialRecordedAt);
+		let recordedAtText = initialRecordedAtText;
 		let percentText = String(this.entry?.percent ?? 0);
 		let startPositionText = this.entry?.startPosition === undefined ? "" : String(this.entry.startPosition);
 		let endPositionText = this.entry?.endPosition === undefined ? "" : String(this.entry.endPosition);
 		let readCharactersText = this.entry?.measurement === "manual" ? String(this.entry.readCharacters) : "";
 		const initialDuration = this.entry?.activeDuration ?? this.plugin.getCurrentSessionDuration(filePath);
-		let activeDurationText = durationInput(initialDuration);
+		const initialDurationText = durationInput(initialDuration);
+		let activeDurationText = initialDurationText;
 
 		this.contentEl.createEl("p", {cls: "setting-item-description", text: I18n.t("progressMeaning")});
 		new Setting(this.contentEl)
@@ -99,15 +106,20 @@ export class ProgressEntryModal extends Modal {
 		new Setting(this.contentEl).addButton(button => button
 			.setCta()
 			.setButtonText(I18n.t("save"))
-			.onClick(() => { void this.save(filePath, recordedAtText, percentText, activeDurationText, startPositionText, endPositionText, readCharactersText); }));
+			.onClick(() => {
+				if (this.saving) return;
+				const recordedAt = recordedAtText === initialRecordedAtText ? initialRecordedAt : new Date(recordedAtText).getTime();
+				const activeDuration = activeDurationText === initialDurationText ? initialDuration : parseDurationInput(activeDurationText);
+				button.setDisabled(true);
+				void this.save(filePath, recordedAt, percentText, activeDuration, startPositionText, endPositionText, readCharactersText)
+					.finally(() => { button.setDisabled(false); });
+			}));
 	}
 
-	private async save(pathValue: string, recordedAtText: string, percentText: string, durationText: string, startText: string, endText: string, charactersText: string): Promise<void> {
+	private async save(pathValue: string, recordedAt: number, percentText: string, activeDuration: number | undefined, startText: string, endText: string, charactersText: string): Promise<void> {
 		const filePath = normalizePath(pathValue.trim());
 		const file = this.app.vault.getFileByPath(filePath);
-		const recordedAt = new Date(recordedAtText).getTime();
 		const percent = Number(percentText);
-		const activeDuration = parseDurationInput(durationText);
 		const startPosition = startText.trim() === "" ? undefined : Number(startText);
 		const endPosition = endText.trim() === "" ? undefined : Number(endText);
 		const readCharacters = charactersText.trim() === "" ? undefined : Number(charactersText);
@@ -115,35 +127,50 @@ export class ProgressEntryModal extends Modal {
 			new Notice(I18n.t("sessionInvalidNote"));
 			return;
 		}
-		if (!Number.isFinite(recordedAt) || !Number.isFinite(percent) || percent <= 0 || percent > 100 || activeDuration === undefined) {
+		if (!isSafeStudyTimestamp(recordedAt) || recordedAt === 0 || !Number.isFinite(percent) || percent <= 0 || percent > 100 || !isSafeStudyDuration(activeDuration)) {
 			new Notice(I18n.t("progressInvalid"));
 			return;
 		}
 		if ((startPosition !== undefined && (!Number.isFinite(startPosition) || startPosition < 0 || startPosition > 100)) ||
 			(endPosition !== undefined && (!Number.isFinite(endPosition) || endPosition < 0 || endPosition > 100)) ||
 			(startPosition !== undefined && endPosition !== undefined && startPosition > endPosition) ||
-			(readCharacters !== undefined && (!Number.isFinite(readCharacters) || readCharacters < 0))) {
+			(readCharacters !== undefined && (!Number.isFinite(readCharacters) || readCharacters < 0 || readCharacters > Number.MAX_SAFE_INTEGER))) {
 			new Notice(I18n.t("readingDetailsInvalid"));
 			return;
 		}
-		let characterCount = this.entry?.characterCount ?? 0;
-		if (file.extension.toLowerCase() === "md") {
-			characterCount = countReadableCharacters(await this.app.vault.cachedRead(file));
+		this.saving = true;
+		try {
+			let characterCount = this.entry?.characterCount ?? 0;
+			if (file.extension.toLowerCase() === "md") {
+				characterCount = countReadableCharacters(await this.app.vault.cachedRead(file));
+			}
+			if (this.app.vault.getFileByPath(filePath) !== file) throw new DataSafetyError("changed");
+			const input = {
+				fileId: this.plugin.dataManager.getReadRecord(filePath)?.fileId ?? filePath,
+				filePath,
+				percent,
+				recordedAt,
+				characterCount,
+				activeDuration,
+				...(startPosition !== undefined ? {startPosition} : {}),
+				...(endPosition !== undefined ? {endPosition} : {}),
+				...(readCharacters !== undefined ? {readCharacters, measurement: "manual" as const} : {measurement: "estimated" as const})
+			};
+			const id = this.entry?.id;
+			const saved = await this.plugin.backupService.withSafetyBackup(backup => id
+				? this.plugin.dataManager.updateProgressEntry(id, input, backup)
+				: this.plugin.dataManager.createProgressEntry(input, backup));
+			if (!saved) {
+				new Notice(I18n.local("This reading record is no longer available.", "这条阅读记录已不存在。"));
+				return;
+			}
+		} catch (error) {
+			console.error("Study Time Statistics failed to save reading progress", error);
+			new Notice(dataSafetyMessage(error, I18n.t("actionFailed")));
+			return;
+		} finally {
+			this.saving = false;
 		}
-		await this.plugin.backupService.createSafetyBackup();
-		const input = {
-			fileId: this.plugin.dataManager.getReadRecord(filePath)?.fileId ?? filePath,
-			filePath,
-			percent,
-			recordedAt,
-			characterCount,
-			activeDuration,
-			...(startPosition !== undefined ? {startPosition} : {}),
-			...(endPosition !== undefined ? {endPosition} : {}),
-			...(readCharacters !== undefined ? {readCharacters, measurement: "manual" as const} : {measurement: "estimated" as const})
-		};
-		if (this.entry) await this.plugin.dataManager.updateProgressEntry(this.entry.id, input);
-		else await this.plugin.dataManager.createProgressEntry(input);
 		new Notice(I18n.t("progressSaved"));
 		this.onSaved();
 		this.close();
